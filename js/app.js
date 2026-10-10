@@ -3,7 +3,7 @@ import * as google from './google.js';
 import * as microsoft from './microsoft.js';
 import { mapLimit } from './util.js';
 import { parseEmail } from './parser.js';
-import { upcomingItems, roundStats } from './golf.js';
+import { upcomingItems, roundStats, goodRoundIds } from './golf.js';
 import { h, icon, toast, openDialog, confirmDialog, download, today, isoLocal } from './ui.js';
 import { buildDemoState } from './demo.js';
 import { homeView } from './views/home.js';
@@ -468,6 +468,7 @@ const ctx = {
   courses: () => live(app.state.courses).sort((a, b) => a.name.localeCompare(b.name)),
   upcoming: () => upcomingItems({ emails: visibleEmails(), teeTimes: app.state.teeTimes }, today()),
   stats: () => roundStats(app.state.rounds),
+  goodRounds: () => goodRoundIds(app.state.rounds),
   email: (id) => (app.state.emails[id] ? effective(app.state.emails[id]) : null),
   hiddenCount: () => live(app.state.emails).filter((e) => e.hidden).length,
   backupPending,
@@ -518,11 +519,11 @@ function shell(route, content) {
     h('a', { class: 'skip', href: '#main', onclick: (e) => { e.preventDefault(); document.getElementById('main').focus(); } }, 'Skip to content'),
     h('header', { class: 'topbar' },
       h('div', { class: 'topbar-inner' },
-        h('a', { class: 'brand', href: '#/home' }, h('img', { src: 'icons/icon.svg', alt: '', width: 28, height: 28 }), h('span', null, 'Clubhouse')),
+        h('a', { class: 'brand', href: '#/home', 'aria-label': 'Clubhouse home' }, h('img', { src: 'icons/icon.svg', alt: '', width: 34, height: 34 }), h('span', { class: 'brand-word' }, 'Clubhouse')),
         h('nav', { class: 'topnav', 'aria-label': 'Main' }, navLinks('topnav-link')),
         checkButton())),
     app.demo ? h('div', { class: 'demo-bar' },
-      h('span', null, h('strong', null, 'Sample data. '), 'Changes aren’t saved.'),
+      h('span', null, h('strong', null, 'Sample data'), ' · changes aren’t saved'),
       h('button', { class: 'link-btn', type: 'button', onclick: actions.exitDemo }, 'Leave demo')) : null,
     h('main', { id: 'main', class: 'main', tabindex: '-1' }, content),
     h('nav', { class: 'tabbar', 'aria-label': 'Main' }, navLinks('tab')));

@@ -33,11 +33,12 @@ export function homeView(ctx) {
   }
 
   if (show.rounds) {
+    const good = ctx.goodRounds();
     side.push(card({
       title: 'Recent scores',
       action: h('button', { class: 'btn btn-small', type: 'button', onclick: () => roundSheet(ctx) }, icon('plus', 16), h('span', null, 'Add score')),
     }, rounds.length
-      ? [h('ul', { class: 'list' }, rounds.slice(0, 3).map((r) => roundRow(ctx, r))),
+      ? [h('ul', { class: 'list scorecard' }, rounds.slice(0, 3).map((r) => roundRow(ctx, r, { good: good.has(r.id) }))),
         rounds.length > 3 ? h('div', { class: 'card-foot' }, seeAll('#/scores', `All ${rounds.length} rounds`)) : null]
       : empty('Record your rounds here to follow your scoring and handicap.')));
   }
@@ -57,8 +58,9 @@ export function homeView(ctx) {
   return h('div', { class: 'page' },
     h('div', { class: 'page-head' },
       h('div', null,
+        h('p', { class: 'kicker' }, formatLongDay(today())),
         h('h1', null, name ? `${greeting()}, ${name}` : greeting()),
-        h('p', { class: 'page-sub' }, formatLongDay(today()), ctx.connected && !ctx.demo && meta.lastScan ? ` · email checked ${timeAgo(meta.lastScan)}` : ''))),
+        ctx.connected && !ctx.demo && meta.lastScan ? h('p', { class: 'page-sub' }, `Email checked ${timeAgo(meta.lastScan)}`) : null)),
     !hasMail ? connectCard(ctx) : null,
     show.stats ? statStrip(ctx) : null,
     main.length || side.length

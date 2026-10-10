@@ -2,7 +2,7 @@
 import { h, add, icon, openDialog, confirmDialog, today, formatLongDay, formatTime, formatFullDate, formatEmailDate, segmented, whenLabel } from '../ui.js';
 import { CATEGORIES } from '../parser.js';
 import { calendarUrl, outlookCalendarUrl, differential, formatIndex } from '../golf.js';
-import { categoryBadge, ordinal } from './common.js';
+import { categoryBadge, ordinal, ticket } from './common.js';
 
 let fieldCount = 0;
 
@@ -67,11 +67,12 @@ export function roundSheet(ctx, { round, prefill } = {}) {
       add(form,
         h('div', { class: 'field-row' },
           field('Date', h('input', { name: 'date', type: 'date', required: true, value: r.date, max: '2100-12-31' })),
-          field('Score', numberInput('score', r.score, { min: 18, max: 200, required: true, placeholder: 'Total' }))),
+          field('Score', Object.assign(numberInput('score', r.score, { min: 18, max: 200, required: true, placeholder: 'Total' }), { className: 'score-input' }))),
         field('Course', courseInput),
         courseList(ctx, listId),
-        h('div', { class: 'field' }, h('span', { class: 'label' }, 'Holes'), holesControl),
-        show.par ? field('Par', parInput) : null,
+        h('div', { class: 'field-row field-row-holes' },
+          h('div', { class: 'field' }, h('span', { class: 'label' }, 'Holes'), holesControl),
+          show.par ? field('Par', parInput) : null),
         show.rating ? h('div', { class: 'field-row' },
           field('Course rating', ratingInput),
           field('Slope', slopeInput)) : null,
@@ -255,16 +256,8 @@ export function upcomingSheet(ctx, item) {
     title: item.title,
     build: (close) => ({
       body: [
-        h('div', { class: 'when-block' },
-          h('span', { class: 'when-kicker' }, item.type === 'event' ? 'Competition' : 'Tee time', whenLabel(item.date) ? ` · ${whenLabel(item.date)}` : ''),
-          h('span', { class: 'when-day' }, formatLongDay(item.date)),
-          item.time ? h('span', { class: 'when-time' }, formatTime(item.time)) : null),
-        facts([
-          ['Course', item.type === 'event' ? item.course : ''],
-          ['Players', item.players],
-          ['Booking ref', item.ref],
-          ['Notes', item.notes],
-        ]),
+        ticket(item, { kicker: item.type === 'event' ? 'Competition' : 'Tee time' }),
+        item.notes ? facts([['Notes', item.notes]]) : null,
         h('div', { class: 'sheet-actions' },
           (() => {
             const cal = calendarLink(ctx, { title: item.type === 'event' ? item.title : `Golf: ${item.title}`, date: item.date, time: item.time, location: item.course || '', details: item.ref ? `Booking ref ${item.ref}` : item.notes || '' });

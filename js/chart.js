@@ -72,6 +72,15 @@ export function scoreChart(rounds, { onCleanup, height = 200 } = {}) {
       svg.append(el('path', { class: 'line', d: points.map((p, i) => `${i ? 'L' : 'M'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ') }));
     }
     for (const p of points) svg.append(el('circle', { class: 'dot', cx: p.x, cy: p.y, r: 4 }));
+    // The best round gets the same red-pen ring as on the scorecard.
+    let bestI = 0;
+    points.forEach((p, i) => { if (p.r.score <= points[bestI].r.score) bestI = i; });
+    const b = points[bestI];
+    const ring = el('path', {
+      class: 'pen',
+      d: `M${b.x - 9} ${b.y + 4}c-3-8 5-14 12-14 8 0 13 5 12 11-1 7-9 10-15 9-6-1-10-5-9-11 1-3 4-5 8-6`,
+    });
+    svg.append(ring);
     hoverDot = el('circle', { class: 'dot dot-active', cx: 0, cy: 0, r: 6, visibility: 'hidden' });
     svg.append(hoverDot);
 

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { differential, handicapIndex, roundStats, bookingsFromEmails, upcomingItems, calendarUrl, scoreToPar, formatIndex, eventTitle, resultTitle } from '../js/golf.js';
+import { differential, handicapIndex, roundStats, bookingsFromEmails, upcomingItems, calendarUrl, scoreToPar, formatIndex, eventTitle, resultTitle, goodRoundIds } from '../js/golf.js';
 
 const round = (date, score, rating = 72, slope = 113, extra = {}) => ({ id: date, date, score, rating, slope, holes: 18, ...extra });
 
@@ -84,6 +84,17 @@ test('result titles drop email boilerplate', () => {
   assert.equal(resultTitle('Saturday Stableford results'), 'Saturday Stableford');
   assert.equal(resultTitle('Monthly Medal - results now available'), 'Monthly Medal');
   assert.equal(resultTitle('Results'), 'Results');
+});
+
+test('rounds worth circling: the best score and any played to handicap', () => {
+  const ids = goodRoundIds({
+    a: { id: 'a', date: '2026-01-01', score: 88, holes: 18, points: 32 },
+    b: { id: 'b', date: '2026-01-08', score: 84, holes: 18, points: 33 },
+    c: { id: 'c', date: '2026-01-15', score: 86, holes: 18, points: 37 },
+    d: { id: 'd', date: '2026-01-20', score: 41, holes: 9, points: 19 },
+    e: { id: 'e', date: '2026-01-21', score: 80, holes: 18, deleted: true },
+  });
+  assert.deepEqual([...ids].sort(), ['b', 'c', 'd']);
 });
 
 test('formatting', () => {

@@ -11,6 +11,16 @@ It works on phones, tablets and computers, can be added to the home screen like 
 
 **To set it up, see [SETUP.md](SETUP.md).** To try it first, run `npm start` and choose *Look around with sample data*.
 
+## Design
+
+The look borrows from golf's own objects rather than a generic app template:
+
+- **The scorecard:** warm card stock, ruled lines and small-caps printed labels. Good rounds are ringed in red pen, as golfers do on a card: his best round, and any round played to handicap (36+ Stableford points).
+- **The honours board:** handicap, average and best score in gold on green, like the boards in a clubhouse bar.
+- **The starter's ticket and tee sheet:** the next tee time is a tear-off ticket, and later bookings are set out like the starter's sheet.
+- **The yardage book:** contour lines of a green on the welcome screen.
+- **Type:** the old sports-page pairing. *Besley*, a Clarendon, for headings and numbers; *Libre Franklin*, a Franklin Gothic revival, for text. Both are self-hosted under the SIL Open Font License (see `fonts/`).
+
 ## How it works
 
 There is no server. Everything runs in the browser:
@@ -28,6 +38,7 @@ There is no server. Everything runs in the browser:
 ```
 index.html            page shell and Content Security Policy
 css/styles.css        all styling (light and dark)
+fonts/                Besley and Libre Franklin (SIL Open Font License)
 js/config.js          ← paste the Google / Microsoft Client IDs here
 js/app.js             state, actions, navigation
 js/parser.js          golf email detection and extraction

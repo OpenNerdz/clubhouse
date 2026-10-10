@@ -136,6 +136,14 @@ export const formatTime = (hhmm) => {
   const [hh, mm] = hhmm.split(':').map(Number);
   return fmt({ hour: 'numeric', minute: '2-digit' }).format(new Date(2000, 0, 1, hh, mm));
 };
+/** "8:30" and "AM" separately, so the time can be large and the AM/PM small (en-GB gives "08:30" and ""). */
+export function timeParts(hhmm) {
+  const [hh, mm] = hhmm.split(':').map(Number);
+  const parts = fmt({ hour: 'numeric', minute: '2-digit' }).formatToParts(new Date(2000, 0, 1, hh, mm));
+  const period = parts.filter((p) => p.type === 'dayPeriod').map((p) => p.value).join('');
+  const main = parts.filter((p) => p.type !== 'dayPeriod').map((p) => p.value).join('').trim();
+  return { main, period };
+}
 export const weekdayShort = (iso) => fmt({ weekday: 'short' }).format(fromIso(iso));
 export const monthShort = (iso) => fmt({ month: 'short' }).format(fromIso(iso));
 
@@ -265,16 +273,28 @@ export function switchRow({ id, label, hint, checked, onChange }) {
     h('input', { id, type: 'checkbox', role: 'switch', class: 'switch', checked: !!checked, onchange: (e) => onChange(e.target.checked) }));
 }
 
-/** A row of pill toggles for choosing several things at once (e.g. which sections to show). */
+/** Tick boxes, like a printed form, for choosing several things at once. */
 export function toggleChips({ id, label, options, onChange }) {
-  return h('div', { class: 'togglechips', role: 'group', 'aria-label': label },
+  return h('div', { class: 'ticks', role: 'group', 'aria-label': label },
     options.map(([key, text, on]) => h('button', {
       id: `${id}-${key}`,
-      class: `togglechip ${on ? 'on' : ''}`,
+      class: `tick ${on ? 'on' : ''}`,
       type: 'button',
-      'aria-pressed': on ? 'true' : 'false',
+      role: 'checkbox',
+      'aria-checked': on ? 'true' : 'false',
       onclick: () => onChange(key, !on),
-    }, on ? icon('check', 16) : null, h('span', null, text))));
+    }, h('span', { class: 'tick-box', 'aria-hidden': 'true' }, on ? icon('check', 15) : null), h('span', null, text))));
+}
+
+/** A hand-drawn ring in red pen, for circling a good score. */
+export function penCircle() {
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('viewBox', '0 0 64 48');
+  svg.setAttribute('preserveAspectRatio', 'none');
+  svg.setAttribute('aria-hidden', 'true');
+  svg.setAttribute('class', 'pen-circle');
+  svg.innerHTML = '<path d="M11 28C6 15 21 5 36 6c15 1 25 10 22 22-3 12-20 17-34 14C11 39 6 30 11 21c3-6 9-9 16-11" vector-effect="non-scaling-stroke"/>';
+  return svg;
 }
 
 export function segmented({ id, options, value, onChange, label }) {

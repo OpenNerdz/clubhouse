@@ -1,4 +1,4 @@
-import { h, icon, card } from '../ui.js';
+import { h, icon, card, penCircle } from '../ui.js';
 import { scoreChart } from '../chart.js';
 import { latestHandicapEmail } from '../golf.js';
 import { roundRow, statStrip } from './common.js';
@@ -31,6 +31,7 @@ export function scoresView(ctx) {
   }
 
   const year = new Date().getFullYear();
+  const good = ctx.goodRounds();
   const sub = !rounds.length ? 'Keep a record of every round'
     : stats.thisYear === rounds.length ? `${rounds.length} round${rounds.length === 1 ? '' : 's'} in ${year}`
       : `${stats.thisYear} in ${year} · ${rounds.length} in total`;
@@ -48,17 +49,22 @@ export function scoresView(ctx) {
     rounds.length ? statStrip(ctx) : null,
     full.length >= 2
       ? card({ title: 'Score trend', className: 'card-chart' },
-        h('p', { class: 'card-sub' }, `Last ${full.length} rounds of 18 holes`),
+        h('p', { class: 'card-sub' }, `Last ${full.length} rounds of 18 holes · best round ringed`),
         scoreChart(full, { onCleanup: ctx.onCleanup }),
         averagesRow)
       : averagesRow ? card({}, averagesRow) : null,
     rounds.length
-      ? byYear.map((g) => card({ title: g.year }, h('ul', { class: 'list' }, g.items.map((r) => roundRow(ctx, r)))))
+      ? byYear.map((g) => card({ title: g.year, className: 'card-scorecard' },
+        h('div', { class: 'scorecard-head', 'aria-hidden': 'true' }, h('span', null, 'Date'), h('span', null, 'Course'), h('span', null, 'Points'), h('span', null, 'Score')),
+        h('ul', { class: 'list scorecard' }, g.items.map((r) => roundRow(ctx, r, { good: good.has(r.id) })))))
       : card({ className: 'card-empty' },
         h('div', { class: 'empty empty-centre' },
           h('span', { class: 'empty-icon' }, icon('scores', 24)),
           h('p', null, 'No rounds yet. Add your first score to start following your game.'),
           addRound())),
+    good.size ? h('p', { class: 'footnote footnote-key' },
+      h('span', { class: 'key-circle', 'aria-hidden': 'true' }, penCircle()),
+      h('span', null, 'Circled: your best round, and any round played to your handicap (36 points or more).')) : null,
     estimateShown
       ? h('p', { class: 'footnote' }, icon('info', 16), h('span', null,
         `Handicap estimate uses the World Handicap System method on your last ${Math.min(stats.eligible, 20)} rounds that have a course rating and slope.`))

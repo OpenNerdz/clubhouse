@@ -52,6 +52,24 @@ export function roundStats(roundsObj, year = new Date().getFullYear()) {
   };
 }
 
+/**
+ * Rounds worth circling, the way golfers ring a good score on the card: his best
+ * 18-hole round, and any round where he played to his handicap (36+ Stableford
+ * points over 18 holes, 18+ over nine).
+ */
+export function goodRoundIds(roundsObj) {
+  const all = live(roundsObj);
+  const ids = new Set();
+  let best = null;
+  for (const r of all) {
+    const holes = r.holes || 18;
+    if (holes === 18 && r.score && (!best || r.score < best.score || (r.score === best.score && r.date > best.date))) best = r;
+    if (r.points && r.points >= (holes === 9 ? 18 : 36)) ids.add(r.id);
+  }
+  if (best) ids.add(best.id);
+  return ids;
+}
+
 /** Collapses confirmation / reminder / change / cancellation emails into one booking each. */
 export function bookingsFromEmails(emails) {
   const groups = [];
