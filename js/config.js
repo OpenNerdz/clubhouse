@@ -6,4 +6,4 @@ export const CLIENT_ID = '844137815396-9g8vjollkkgs6i1ju79pu1c4o74r395o.apps.goo
 
 // Microsoft (for Outlook, Hotmail and Live): the "Application (client) ID",
 // which looks like 1a2b3c4d-1234-5678-9abc-1234567890ab
-export const MICROSOFT_CLIENT_ID = 'PASTE_YOUR_MICROSOFT_CLIENT_ID_HERE';
+export const MICROSOFT_CLIENT_ID = 'd687bd85-c667-4b1d-8782-8556270454a2';
