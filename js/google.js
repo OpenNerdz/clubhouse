@@ -151,7 +151,12 @@ async function api(url, { method = 'GET', headers = {}, body } = {}, attempt = 0
     if (res.status === 403 && /has not been used|is disabled/i.test(text)) {
       throw new Error('The Gmail or Drive API isn’t switched on in Google Cloud. See step 2 of SETUP.md.');
     }
-    const err = new Error(`Google returned an error (${res.status}). Please try again later.`);
+    if (/mail service not enabled/i.test(text)) {
+      throw new Error('This Google account has no Gmail inbox, so there’s no email to read. In Settings, disconnect and sign in with a Gmail account.');
+    }
+    let reason = '';
+    try { reason = JSON.parse(text).error.message || ''; } catch { /* not JSON */ }
+    const err = new Error(`Google returned an error (${res.status}${reason ? `: ${reason.slice(0, 160)}` : ''}). Please try again later.`);
     err.status = res.status;
     throw err;
   }
