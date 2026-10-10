@@ -156,8 +156,11 @@ export function buildDemoState(dayFirst = true) {
     if (parsed) state.emails[parsed.id] = { ...parsed, updatedAt: 1 };
   }
 
+  // Oakmere's card has its pars and stroke indexes, so scoring hole by hole there shows shots and points.
+  const oakCard = [[4, 7], [4, 3], [3, 17], [5, 1], [4, 11], [4, 5], [3, 15], [4, 9], [5, 13],
+    [4, 8], [3, 16], [4, 2], [5, 12], [4, 4], [4, 10], [3, 18], [4, 6], [5, 14]].map(([par, si]) => ({ par, si }));
   const courses = {
-    oak: { name: 'Oakmere Golf Club', par: 72, rating: 71.4, slope: 128 },
+    oak: { name: 'Oakmere Golf Club', par: 72, rating: 71.4, slope: 128, card: oakCard },
     king: { name: 'Kingsdown Golf & Country Club', par: 71, rating: 70.2, slope: 124 },
     hol: { name: 'Hollins Park Golf Club', par: 70, rating: 69.1, slope: 121 },
     brk: { name: 'Brackenwood Golf Club', par: 72, rating: 72.3, slope: 131 },

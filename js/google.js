@@ -175,19 +175,22 @@ export async function getProfile() {
   return { provider: 'google', name: p.given_name || p.name || '', fullName: p.name || '', email: p.email || '', picture: p.picture || '' };
 }
 
-/** Gmail IDs of possible golf emails, newest first. `more` is true when there were further matches beyond `max`. */
-export function searchMessages({ months, extraTerms, after, max = 1500 }) {
-  return listMessageIds(buildQuery({ months, extraTerms, after }), max);
+/**
+ * Gmail IDs of possible golf emails not read before (`known` says which were), newest
+ * first. `more` is true when there were further matches beyond `max`.
+ */
+export function searchMessages({ months, extraTerms, after, known = () => false, max = 1500 }) {
+  return listMessageIds(buildQuery({ months, extraTerms, after }), max, known);
 }
 
-async function listMessageIds(q, max) {
+async function listMessageIds(q, max, known) {
   const ids = [];
   let pageToken = '';
   do {
     const params = new URLSearchParams({ q, maxResults: '500' });
     if (pageToken) params.set('pageToken', pageToken);
     const res = await api(`https://gmail.googleapis.com/gmail/v1/users/me/messages?${params}`);
-    for (const m of res.messages || []) ids.push(m.id);
+    for (const m of res.messages || []) if (!known(m.id)) ids.push(m.id);
     pageToken = res.nextPageToken || '';
   } while (pageToken && ids.length < max);
   return { ids: ids.slice(0, max), more: !!pageToken || ids.length > max };

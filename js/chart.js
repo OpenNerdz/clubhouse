@@ -1,4 +1,4 @@
-// Score trend: one line, one dot per round, hover/keyboard readout.
+// Trend charts (scores, handicap): one line, one dot per point, hover/keyboard readout.
 import { h, add, formatShortDate, formatFullDate } from './ui.js';
 
 const NS = 'http://www.w3.org/2000/svg';
@@ -11,7 +11,7 @@ function el(tag, attrs = {}) {
 
 function niceTicks(min, max) {
   const span = max - min;
-  const step = span <= 8 ? 2 : span <= 20 ? 5 : 10;
+  const step = span <= 3 ? 1 : span <= 8 ? 2 : span <= 20 ? 5 : 10;
   const lo = Math.floor((min - 1) / step) * step;
   const hi = Math.ceil((max + 1) / step) * step;
   const ticks = [];
@@ -20,14 +20,22 @@ function niceTicks(min, max) {
 }
 
 /** rounds: oldest first, each with date, score, course. */
-export function scoreChart(rounds, { onCleanup, height = 200 } = {}) {
-  const first = rounds[0];
-  const last = rounds[rounds.length - 1];
+export function scoreChart(rounds, opts = {}) {
+  return trendChart(rounds.map((r) => ({ date: r.date, value: r.score, note: r.course })), { name: 'Score trend', ...opts });
+}
+
+/**
+ * series: oldest first, each { date, value, note }. The lowest is ringed in red
+ * pen, as low is good for both scores and handicaps. `format` writes a value.
+ */
+export function trendChart(series, { onCleanup, height = 200, name = 'Trend', format = String } = {}) {
+  const first = series[0];
+  const last = series[series.length - 1];
   const wrap = h('div', {
     class: 'chart',
     tabindex: '0',
     role: 'img',
-    'aria-label': `Score trend over your last ${rounds.length} rounds, from ${first.score} on ${formatFullDate(first.date)} to ${last.score} on ${formatFullDate(last.date)}. Use the arrow keys to read each round.`,
+    'aria-label': `${name}: ${series.length} points, from ${format(first.value)} on ${formatFullDate(first.date)} to ${format(last.value)} on ${formatFullDate(last.date)}. Use the arrow keys to read each one.`,
   });
   const tip = h('div', { class: 'chart-tip', hidden: true });
   wrap.append(tip);
@@ -42,30 +50,30 @@ export function scoreChart(rounds, { onCleanup, height = 200 } = {}) {
     width = wrap.clientWidth;
     if (!width) return;
     const m = { top: 14, right: 34, bottom: 26, left: 34 };
-    const scores = rounds.map((r) => r.score);
+    const scores = series.map((r) => r.value);
     const { lo, hi, ticks } = niceTicks(Math.min(...scores), Math.max(...scores));
     const iw = width - m.left - m.right;
     const ih = height - m.top - m.bottom;
-    const x = (i) => m.left + (rounds.length === 1 ? iw / 2 : (i / (rounds.length - 1)) * iw);
+    const x = (i) => m.left + (series.length === 1 ? iw / 2 : (i / (series.length - 1)) * iw);
     const y = (v) => m.top + ((hi - v) / (hi - lo)) * ih;
 
     const svg = el('svg', { width, height, viewBox: `0 0 ${width} ${height}`, 'aria-hidden': 'true' });
     for (const t of ticks) {
       svg.append(el('line', { class: 'grid', x1: m.left, x2: width - m.right, y1: y(t), y2: y(t) }));
       const label = el('text', { class: 'axis', x: m.left - 8, y: y(t), 'text-anchor': 'end', 'dominant-baseline': 'middle' });
-      label.textContent = t;
+      label.textContent = format(t);
       svg.append(label);
     }
-    const xFirst = el('text', { class: 'axis', x: x(0), y: height - 6, 'text-anchor': rounds.length === 1 ? 'middle' : 'start' });
+    const xFirst = el('text', { class: 'axis', x: x(0), y: height - 6, 'text-anchor': series.length === 1 ? 'middle' : 'start' });
     xFirst.textContent = formatShortDate(first.date);
     svg.append(xFirst);
-    if (rounds.length > 1) {
-      const xLast = el('text', { class: 'axis', x: x(rounds.length - 1), y: height - 6, 'text-anchor': 'end' });
+    if (series.length > 1) {
+      const xLast = el('text', { class: 'axis', x: x(series.length - 1), y: height - 6, 'text-anchor': 'end' });
       xLast.textContent = formatShortDate(last.date);
       svg.append(xLast);
     }
 
-    points = rounds.map((r, i) => ({ x: x(i), y: y(r.score), r }));
+    points = series.map((r, i) => ({ x: x(i), y: y(r.value), r }));
     cross = el('line', { class: 'crosshair', y1: m.top, y2: height - m.bottom, x1: 0, x2: 0, visibility: 'hidden' });
     svg.append(cross);
     if (points.length > 1) {
@@ -74,7 +82,7 @@ export function scoreChart(rounds, { onCleanup, height = 200 } = {}) {
     for (const p of points) svg.append(el('circle', { class: 'dot', cx: p.x, cy: p.y, r: 4 }));
     // The best round gets the same red-pen ring as on the scorecard.
     let bestI = 0;
-    points.forEach((p, i) => { if (p.r.score <= points[bestI].r.score) bestI = i; });
+    points.forEach((p, i) => { if (p.r.value <= points[bestI].r.value) bestI = i; });
     const b = points[bestI];
     const ring = el('path', {
       class: 'pen',
@@ -86,7 +94,7 @@ export function scoreChart(rounds, { onCleanup, height = 200 } = {}) {
 
     const end = points[points.length - 1];
     const endLabel = el('text', { class: 'end-label', x: end.x + 10, y: end.y, 'dominant-baseline': 'middle' });
-    endLabel.textContent = end.r.score;
+    endLabel.textContent = format(end.r.value);
     svg.append(endLabel);
 
     const old = wrap.querySelector('svg');
@@ -107,9 +115,9 @@ export function scoreChart(rounds, { onCleanup, height = 200 } = {}) {
     hoverDot.setAttribute('visibility', 'visible');
     tip.replaceChildren();
     add(tip,
-      h('strong', null, String(p.r.score)),
+      h('strong', null, format(p.r.value)),
       h('span', null, formatFullDate(p.r.date)),
-      p.r.course ? h('span', null, p.r.course) : null);
+      p.r.note ? h('span', null, p.r.note) : null);
     tip.hidden = false;
     const tw = tip.offsetWidth;
     const left = Math.min(Math.max(p.x - tw / 2, 0), width - tw);

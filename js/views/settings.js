@@ -93,7 +93,15 @@ export function settingsView(ctx) {
         label: 'Home screen sections',
         options: Object.entries(HOME_SECTIONS).map(([key, label]) => [key, label, !!s.home[key]]),
         onChange: (key, on) => ctx.actions.setSetting(`home.${key}`, on),
-      }))),
+      })),
+      h('div', { class: 'divider' }),
+      switchRow({
+        id: 'set-weather',
+        label: 'Weather for tee times',
+        hint: 'Finds the course on OpenStreetMap and the forecast on Open-Meteo. Only the course name and where it is are sent.',
+        checked: s.weather,
+        onChange: (v) => ctx.actions.setSetting('weather', v),
+      })),
 
     mailGroup(ctx),
 
@@ -104,6 +112,13 @@ export function settingsView(ctx) {
         hint: 'From rounds that have a course rating and slope.',
         checked: s.handicapEstimate,
         onChange: (v) => ctx.actions.setSetting('handicapEstimate', v),
+      }),
+      switchRow({
+        id: 'set-gps',
+        label: 'Distances on the course',
+        hint: 'Uses GPS while you score hole by hole, and keeps the screen on. Your position stays on this phone.',
+        checked: s.gps,
+        onChange: (v) => ctx.actions.setSetting('gps', v),
       }),
       h('div', { class: 'setting-line' },
         h('span', null, h('strong', null, 'Playing partners'), h('span', { class: 'muted' }, ` · ${ctx.friends().length || 'none yet'}`)),
@@ -125,9 +140,13 @@ export function settingsView(ctx) {
           segmented({ id: 'set-theme', label: 'Appearance', value: s.theme, options: [['auto', 'Automatic'], ['light', 'Light'], ['dark', 'Dark']], onChange: (v) => ctx.actions.setSetting('theme', v) })),
         h('div', { class: 'field' },
           h('span', { class: 'label' }, 'Text size'),
-          segmented({ id: 'set-size', label: 'Text size', value: s.textSize, options: [['normal', 'Standard'], ['large', 'Large']], onChange: (v) => ctx.actions.setSetting('textSize', v) })))),
+          segmented({ id: 'set-size', label: 'Text size', value: s.textSize, options: [['normal', 'Standard'], ['large', 'Large']], onChange: (v) => ctx.actions.setSetting('textSize', v) })),
+        h('div', { class: 'field' },
+          h('span', { class: 'label' }, 'Distances in'),
+          segmented({ id: 'set-distance', label: 'Distances in', value: s.distance, options: [['auto', 'Automatic'], ['yards', 'Yards'], ['metres', 'Metres']], onChange: (v) => ctx.actions.setSetting('distance', v) })))),
 
-    group('Your data', 'Kept on this device. Save a copy as a file at any time.',
+    // Hidden in the demo: restoring would only fill the sample data, and deleting would remove his real data.
+    ctx.demo ? null : group('Your data', 'Kept on this device. Save a copy as a file at any time.',
       h('div', { class: 'button-row' },
         h('button', { class: 'btn', type: 'button', onclick: ctx.actions.exportData }, icon('download', 18), h('span', null, 'Save backup file')),
         h('button', { class: 'btn', type: 'button', onclick: () => importInput.click() }, icon('upload', 18), h('span', null, 'Restore from file')),

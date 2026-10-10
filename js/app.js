@@ -3,9 +3,11 @@ import * as google from './google.js';
 import * as microsoft from './microsoft.js';
 import { mapLimit } from './util.js';
 import { parseEmail } from './parser.js';
-import { upcomingItems, unscoredRounds, roundStats, goodRoundIds, partnerCounts } from './golf.js';
+import { upcomingItems, unscoredRounds, roundStats, goodRoundIds, partnerCounts, latestHandicapEmail, indexValue, courseRecord, courseHandicap, holesPlayed } from './golf.js';
+import * as weather from './weather.js';
 import { h, icon, toast, openDialog, confirmDialog, download, today, isoLocal } from './ui.js';
 import { buildDemoState } from './demo.js';
+import { playSheet } from './views/play.js';
 import { homeView } from './views/home.js';
 import { mailView } from './views/mail.js';
 import { scoresView } from './views/scores.js';
@@ -131,10 +133,13 @@ async function scan({ auto = false } = {}) {
   try {
     const s = app.state.settings;
     const since = app.state.meta.lastScan ? app.state.meta.lastScan - 3 * DAY : 0;
-    const { ids, more } = await p.searchMessages({ months: s.months, extraTerms: s.extraTerms, after: since || undefined });
-    if (stale(session)) return;
     const skipped = new Set(app.state.meta.skipped);
-    const unread = ids.filter((id) => !app.state.emails[id] && !skipped.has(id));
+    // Emails already read are left out of the search, so each press of Check email
+    // carries on further back in a big mailbox instead of finding the same ones.
+    const known = (id) => !!app.state.emails[id] || skipped.has(id);
+    const { ids, more } = await p.searchMessages({ months: s.months, extraTerms: s.extraTerms, after: since || undefined, known });
+    if (stale(session)) return;
+    const unread = ids.filter((id) => !known(id));
     let done = 0;
     let added = 0;
     let missed = false;
@@ -381,14 +386,18 @@ const actions = {
       st.rounds[id] = stamp({ ...round, id });
       if (round.course) {
         const key = courseKey(round.course);
-        const prev = st.courses[key] || {};
+        const prev = st.courses[key] || courseRecord(st.courses, round.course) || {};
+        // The pars and stroke indexes from a card are kept for next time; a nine only
+        // fills in a course that has no card yet.
+        const card = round.card && (round.card.length === 18 || !prev.card) ? round.card.map(({ par, si }) => ({ par, si: si || null })) : prev.card;
         st.courses[key] = stamp({
           ...prev,
           id: key,
           name: round.course.trim(),
-          par: round.par || prev.par,
-          rating: round.rating || prev.rating,
+          par: (round.holes || 18) === 18 ? round.par || prev.par : prev.par,
+          rating: (round.holes || 18) === 18 ? round.rating || prev.rating : prev.rating,
           slope: round.slope || prev.slope,
+          card,
         });
       }
     });
@@ -457,12 +466,16 @@ const actions = {
       target[keys[keys.length - 1]] = value;
       st.settings.updatedAt = Date.now();
       if (path === 'months' || path === 'extraTerms') {
-        // Search again from the start so the new range/words take effect.
+        // Search again from the start so the new range/words take effect. New words
+        // can make a skipped email count; a longer look-back doesn't change what's golf.
         st.meta.lastScan = 0;
-        st.meta.skipped = [];
+        if (path === 'extraTerms') st.meta.skipped = [];
       }
     });
     applyAppearance();
+    if ((path === 'months' || path === 'extraTerms') && app.state.meta.profile && !app.demo) {
+      toast('Saved. Check your email again to use it.', { action: { label: 'Check now', run: checkEmail } });
+    }
   },
   async startDemo() {
     app.session += 1;
@@ -478,6 +491,79 @@ const actions = {
     try { localStorage.removeItem('clubhouse-demo'); } catch { /* ignore */ }
     app.state = await store.loadState();
     navigate('home');
+    render();
+  },
+  /** Starts scoring hole by hole, from a form, a tee time or a saved round's card. */
+  async startRound(from = {}) {
+    const running = app.state.meta.live;
+    if (running && holesPlayed(running.card)) {
+      const ok = await confirmDialog({
+        title: 'Start a new round?',
+        message: `You have a round in progress${running.course ? ` at ${running.course}` : ''}. Starting a new one throws it away.`,
+        confirmLabel: 'Start new round',
+        danger: true,
+      });
+      if (!ok) return playSheet(ctx);
+    }
+    const holes = from.holes === 9 ? 9 : 18;
+    const known = courseRecord(app.state.courses, from.course) || {};
+    const pattern = from.card || known.card || [];
+    const card = Array.from({ length: holes }, (_, i) => {
+      const x = pattern[i] || {};
+      return from.card ? { par: x.par || 4, si: x.si || null, strokes: x.strokes ?? null, putts: x.putts ?? null, picked: !!x.picked }
+        : { par: x.par || 4, si: x.si || null, strokes: null, putts: null, picked: false };
+    });
+    const first = card.findIndex((x) => x.strokes === null && !x.picked);
+    app.state.meta.live = {
+      course: (from.course || '').trim(),
+      date: from.date || today(),
+      holes,
+      card,
+      hole: first < 0 ? 0 : first,
+      rating: from.rating || known.rating, // an 18-hole rating is halved for a nine
+      slope: from.slope || known.slope,
+      indexAtPlay: from.indexAtPlay ?? currentIndex(),
+      roundId: from.id || null,
+      startedAt: Date.now(),
+    };
+    persist();
+    render();
+    playSheet(ctx);
+  },
+  /** Saves the round in progress after every tap, without redrawing the screen behind it until asked. */
+  saveLive(draft, { redraw = false } = {}) {
+    app.state.meta.live = draft;
+    persist();
+    if (redraw) render();
+  },
+  clearLive() {
+    app.state.meta.live = null;
+    persist();
+    render();
+  },
+  /** Holes, greens, pars and stroke indexes found on OpenStreetMap. Greens he saved himself are kept. */
+  saveCourseMap(name, found) {
+    updateCourse(name, (c) => {
+      const mine = Object.fromEntries(Object.entries(c.greens || {}).filter(([, g]) => g.from === 'mine'));
+      c.greens = { ...found.greens, ...mine };
+      const card = c.card ? c.card.map((x) => ({ ...x })) : null;
+      if (card) card.forEach((x, i) => { if (!x.si && found.sis[i + 1]) x.si = found.sis[i + 1]; });
+      c.card = card || Array.from({ length: 18 }, (_, i) => ({ par: found.pars[i + 1] || 4, si: found.sis[i + 1] || null }));
+      if (!c.par && Object.keys(found.pars).length === 18) c.par = Object.values(found.pars).reduce((a, b) => a + b, 0);
+    });
+  },
+  /** He's standing on a green: remember where it is. */
+  saveGreen(name, hole, spot) {
+    const before = (courseRecord(app.state.courses, name) || {}).greens || {};
+    updateCourse(name, (c) => { c.greens = { ...(c.greens || {}), [hole]: { lat: spot.lat, lon: spot.lon, from: 'mine' } }; });
+    toast(`Green ${hole} saved.`, { action: { label: 'Undo', run: () => updateCourse(name, (c) => { c.greens = { ...before }; }) } });
+  },
+  /** He picked where a course is, for the weather, when its name alone wasn't enough. */
+  setPlace(name, place) {
+    const key = courseKey(name);
+    app.state.meta.places = { ...app.state.meta.places, [key]: { lat: place.lat, lon: place.lon, name: place.name, at: Date.now(), chosen: true } };
+    for (const k of forecasts.keys()) if (k.startsWith(`${key}|`)) forecasts.delete(k);
+    persist();
     render();
   },
   finishOnboarding() {
@@ -502,6 +588,7 @@ const actions = {
     }
   },
   async deleteAll() {
+    if (app.demo) return; // the real data isn't on screen, so don't offer to delete it
     const ok = await confirmDialog({
       title: 'Delete everything?',
       message: 'This removes all scores, tee times, settings and golf emails from this device. Your mailbox is not touched. A backup in Google Drive or OneDrive, if you have one, is kept.',
@@ -522,6 +609,68 @@ const actions = {
     else toast('All Clubhouse data was removed from this device.');
   },
 };
+
+/** Changes a course's saved details, adding the course if it's new. */
+function updateCourse(name, fn) {
+  mutate((st) => {
+    const found = courseRecord(st.courses, name);
+    const key = found ? found.id : courseKey(name);
+    const c = { ...(found || { id: key, name: name.trim() }) };
+    fn(c);
+    st.courses[key] = stamp(c);
+  });
+}
+
+/* ---------- handicap and weather for the screens ---------- */
+
+/** His index now: the latest from a handicap email, or the estimate if he wants one. */
+function currentIndex() {
+  const official = latestHandicapEmail(visibleEmails());
+  if (official) return indexValue(official.details.index);
+  return app.state.settings.handicapEstimate ? roundStats(app.state.rounds).index : null;
+}
+
+/** The shots he gets at a course, when its rating and slope are known. */
+function shotsAt(name, holes = 18) {
+  const c = courseRecord(app.state.courses, name);
+  return c ? courseHandicap(currentIndex(), { ...c, holes }) : null;
+}
+
+const forecasts = new Map(); // kept in memory for half an hour
+const lookups = new Map();
+const DEMO_WEATHER = { temp: 14, rain: 20, wind: 11, code: 2 };
+
+/** Where a course is. Remembered on this device so the map is asked once per course. */
+function place(name) {
+  const key = courseKey(name);
+  const known = app.state.meta.places[key];
+  if (known && (known.lat !== undefined || Date.now() - known.at < 30 * DAY)) return Promise.resolve(known.lat !== undefined ? known : null);
+  if (!lookups.has(key)) {
+    lookups.set(key, weather.findCourse(name).then((found) => {
+      app.state.meta.places = { ...app.state.meta.places, [key]: { ...(found || {}), at: Date.now() } };
+      persist();
+      return found;
+    }).finally(() => lookups.delete(key)));
+  }
+  return lookups.get(key);
+}
+
+/** The forecast for an upcoming round, or null (too far ahead, turned off, offline, course not on the map). */
+function forecast(item) {
+  if (!app.state.settings.weather || !item.course || !item.date || !weather.inRange(item.date, today())) return Promise.resolve(null);
+  if (app.demo) return Promise.resolve({ ...DEMO_WEATHER, units: weather.units() });
+  const key = `${courseKey(item.course)}|${item.date}|${item.time || ''}`;
+  const hit = forecasts.get(key);
+  if (hit && Date.now() - hit.at < 30 * 60000) return hit.promise;
+  const promise = place(item.course)
+    .then((p) => (p ? weather.forecastFor(p, item.date, item.time).then((w) => w && { ...w, place: p.name }) : null))
+    .catch(() => {
+      forecasts.delete(key); // try again next time, e.g. once there's a signal
+      return null;
+    });
+  forecasts.set(key, { at: Date.now(), promise });
+  return promise;
+}
 
 /* ---------- context handed to every screen ---------- */
 
@@ -552,6 +701,16 @@ const ctx = {
   goodRounds: () => goodRoundIds(app.state.rounds),
   email: (id) => (app.state.emails[id] ? effective(app.state.emails[id]) : null),
   hiddenCount: () => live(app.state.emails).filter((e) => e.hidden).length,
+  currentIndex,
+  shotsAt,
+  forecast,
+  course: (name) => courseRecord(app.state.courses, name),
+  /** Where a course is on the map, if known: { lat, lon, name }; `false` when the map couldn't find it. */
+  placeOf: (name) => {
+    const p = name && app.state.meta.places[courseKey(name)];
+    return p ? (p.lat !== undefined ? p : false) : null;
+  },
+  get live() { return app.state.meta.live; },
   backupPending,
   actions,
   navigate,

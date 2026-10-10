@@ -1474,6 +1474,162 @@ input[type="search"]::-webkit-search-cancel-button { -webkit-appearance: none; a
 .doc-lead { font-size: 1.06rem; }
 .doc-foot { margin-top: 36px; }
 
+/* ---------- scoring hole by hole ---------- */
+
+.hole-by-hole { align-self: flex-start; margin-top: -8px; }
+.static-value { display: flex; align-items: center; min-height: 46px; font-family: var(--display); font-size: 1.2rem; font-weight: 700; }
+
+.sheet-play .sheet-body { gap: 14px; }
+.play-hole { display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center; }
+.play-kicker { font-family: var(--display); font-size: 1.6rem; font-weight: 750; line-height: 1.1; }
+.play-hole-setup { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px 10px; }
+.play-hole-setup .seg span { padding: 8px 12px; }
+.play-si { width: auto; min-height: 40px; padding-top: 6px; padding-bottom: 6px; font-size: 0.9rem; font-weight: 700; }
+.play-shots:not(:empty) {
+  padding: 3px 9px;
+  border: 1.5px solid var(--brass);
+  border-radius: 3px;
+  color: var(--brass);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+/* Big buttons either side of the score, easy to hit with a glove on. */
+.play-score { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 4px 0; }
+.play-step {
+  display: grid;
+  place-items: center;
+  width: 76px;
+  height: 76px;
+  border: 1.5px solid var(--rule-strong);
+  border-radius: 50%;
+  background: var(--card);
+  color: var(--green-ink);
+  box-shadow: var(--shadow);
+  touch-action: manipulation;
+}
+.play-step:hover { border-color: var(--green); }
+.play-step:active { background: var(--green-soft); transform: scale(0.97); }
+.play-step .icon { stroke-width: 2.4; }
+.play-step-small { width: 48px; height: 48px; box-shadow: none; }
+.play-value { font-family: var(--display); font-size: 4.6rem; line-height: 1; font-weight: 750; text-align: center; font-variant-numeric: tabular-nums lining-nums; }
+.play-value.is-default { color: var(--ink-3); opacity: 0.7; }
+.play-verdict { min-height: 1.5em; color: var(--ink-2); font-weight: 650; text-align: center; }
+.play-pick { align-self: center; color: var(--ink-2); padding: 4px 8px; }
+.play-putts { display: flex; align-items: center; justify-content: center; gap: 14px; }
+.play-putts .label { color: var(--ink-3); font-size: 0.7rem; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; }
+.play-putts-value { min-width: 2ch; font-family: var(--display); font-size: 1.6rem; font-weight: 750; text-align: center; }
+.play-total {
+  padding: 9px 0 8px;
+  border-top: 3px double var(--rule);
+  border-bottom: 3px double var(--rule);
+  font-family: var(--display);
+  font-size: 1.08rem;
+  font-weight: 700;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.play-strip { display: grid; grid-template-columns: repeat(9, minmax(0, 1fr)); gap: 4px; }
+.strip-hole {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 4px 0 5px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-sm);
+  background: var(--card);
+  color: var(--ink-3);
+  line-height: 1.15;
+}
+.strip-n { font-size: 0.62rem; font-weight: 800; letter-spacing: 0.04em; }
+.strip-score { font-family: var(--display); font-size: 1.02rem; font-weight: 700; }
+.strip-hole.done { color: var(--ink); border-color: var(--rule-strong); }
+.strip-hole.on { border-color: var(--green); box-shadow: inset 0 0 0 1px var(--green); background: var(--green-soft); color: var(--ink); }
+.play-discard { align-self: center; color: var(--ink-3); font-weight: 600; font-size: 0.84rem; }
+.play-next { min-width: 140px; }
+
+/* On the home screen while scoring, and on the day of a tee time. */
+.live { border-left-color: var(--green); }
+.live .return-kicker { color: var(--green-ink); }
+.ticket-actions { display: flex; justify-content: flex-end; padding: 0 14px 14px; margin-top: -2px; }
+
+/* The card as printed: birdies ringed, bogeys boxed. */
+.cardgrid { display: grid; gap: 8px; }
+.cardgrid-nine {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  background: var(--card);
+  border: 1px solid var(--rule-strong);
+  font-variant-numeric: tabular-nums lining-nums;
+}
+.cardgrid-nine th, .cardgrid-nine td { padding: 4px 0; border: 1px solid var(--rule); text-align: center; font-size: 0.82rem; }
+.cardgrid-nine th:first-child { width: 46px; padding-left: 6px; text-align: left; color: var(--ink-3); font-size: 0.6rem; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; }
+.cardgrid-nine thead th { background: var(--board); color: var(--gold); font-size: 0.7rem; font-weight: 800; }
+.cardgrid-nine thead th:first-child { color: var(--gold-dim); }
+.cardgrid-nine th:last-child, .cardgrid-nine td:last-child { width: 34px; font-weight: 800; }
+.cardgrid-par td { color: var(--ink-3); }
+.cardgrid-total { font-family: var(--display); }
+.mark { display: inline-grid; place-items: center; width: 1.65em; height: 1.65em; font-family: var(--display); font-weight: 700; }
+.mark-birdie, .mark-eagle { border: 1.5px solid var(--flag); border-radius: 50%; }
+.mark-eagle { box-shadow: 0 0 0 1.5px var(--card), 0 0 0 3px var(--flag); }
+.mark-bogey, .mark-double { border: 1.5px solid var(--ink-3); border-radius: 2px; }
+.mark-double { box-shadow: 0 0 0 1.5px var(--card), 0 0 0 3px var(--ink-3); }
+.mark-picked { color: var(--ink-3); }
+
+/* ---------- weather ---------- */
+
+.weather { display: flex; align-items: center; gap: 6px; margin-top: 6px; color: var(--ink-2); font-size: 0.86rem; font-weight: 650; }
+.weather .icon { color: var(--brass); }
+.weather-detailed { gap: 12px; margin: 0; padding: 12px 14px; border: 1px solid var(--rule); border-radius: var(--radius-sm); background: var(--card); font-size: 0.92rem; font-weight: 500; }
+.weather-text { display: flex; flex-direction: column; }
+.weather-text strong { color: var(--ink); font-size: 1rem; }
+.weather-text small { color: var(--ink-3); font-size: 0.74rem; font-weight: 600; letter-spacing: 0; }
+
+/* The filter row scrolls sideways on a phone; fade its edge so it's clear there's more. */
+@media (max-width: 759px) {
+  .filters {
+    -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 40px), transparent);
+    mask-image: linear-gradient(90deg, #000 calc(100% - 40px), transparent);
+  }
+}
+
+/* ---------- distances on the course (GPS) ---------- */
+
+/* Gold on green, like the honours board: the one number he needs, big enough to read in sunshine. */
+.gps {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 12px 14px 10px;
+  border-radius: var(--radius);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0) 45%), var(--board);
+  color: var(--board-ink);
+  text-align: center;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.25);
+}
+.gps-off { padding: 0; background: none; box-shadow: none; }
+.gps-off .link-btn { color: var(--green-ink); }
+.gps-main { display: flex; align-items: baseline; justify-content: center; gap: 6px; }
+.gps-big { color: var(--gold); font-family: var(--display); font-size: 3.2rem; line-height: 1; font-weight: 750; font-variant-numeric: tabular-nums lining-nums; text-shadow: 0 1px 0 rgba(0, 0, 0, 0.35); }
+.gps-unit { padding: 4px 2px; border: 0; background: none; color: var(--gold-dim); font-size: 0.8rem; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; text-decoration: underline dotted; text-underline-offset: 3px; }
+.gps-to { color: rgba(243, 234, 211, 0.75); font-size: 0.86rem; }
+.gps-fb { font-weight: 700; font-size: 0.92rem; font-variant-numeric: tabular-nums; }
+.gps-note { max-width: 36ch; color: rgba(243, 234, 211, 0.88); font-size: 0.88rem; }
+.gps-links { display: flex; flex-wrap: wrap; justify-content: center; gap: 0 18px; }
+.gps .gps-links .link-btn { color: var(--gold); font-size: 0.84rem; }
+.gps-name { display: flex; gap: 8px; width: 100%; margin-top: 4px; }
+.gps-name input { min-height: 40px; padding: 6px 10px; }
+
+/* Picking a course on the map. */
+.place-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 2px 12px; margin-top: -8px; color: var(--ink-3); font-size: 0.86rem; }
+.place-search { display: flex; gap: 8px; }
+.place-list { margin: -6px -22px 0; }
+.place-note { padding: 12px 22px; color: var(--ink-3); font-size: 0.9rem; }
+
 /* ---------- toast ---------- */
 
 .toast {

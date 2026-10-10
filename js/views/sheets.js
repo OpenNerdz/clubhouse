@@ -1,9 +1,11 @@
 // Pop-up sheets: forms for rounds and tee times, and detail views.
 import { h, add, icon, openDialog, today, formatLongDay, formatTime, formatEmailDate, segmented } from '../ui.js';
 import { CATEGORIES } from '../parser.js';
-import { calendarUrl, outlookCalendarUrl, differential, formatIndex } from '../golf.js';
-import { categoryBadge, ordinal, ticket, shortCourse } from './common.js';
+import { calendarUrl, outlookCalendarUrl, differential, formatIndex, shotsLabel } from '../golf.js';
+import { categoryBadge, ordinal, ticket, shortCourse, weatherLine } from './common.js';
 import { partnerPicker } from './partners.js';
+import { cardGrid } from './play.js';
+import { searchPlaces, inRange } from '../weather.js';
 
 let fieldCount = 0;
 
@@ -40,10 +42,15 @@ function recentCourses(ctx, n = 3) {
   return [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, n).map(([name]) => name);
 }
 
-export function roundSheet(ctx, { round, prefill } = {}) {
-  const r = round || { date: today(), holes: 18, ...prefill };
+/**
+ * Adding or changing a round. `prefill` fills in the form, e.g. from a tee time or
+ * a finished hole-by-hole card (`fromCard`), which is then cleared once saved.
+ */
+export function roundSheet(ctx, { round, prefill, fromCard = false } = {}) {
+  const r = round ? { ...round, ...prefill } : { date: today(), holes: 18, ...prefill };
   const show = ctx.settings.roundFields;
   let holes = r.holes || 18;
+  const card = Array.isArray(r.card) && r.card.length === holes ? r.card : null;
   const listId = `courses-${Date.now()}`;
 
   openDialog({
@@ -51,7 +58,7 @@ export function roundSheet(ctx, { round, prefill } = {}) {
     build: (close) => {
       const form = h('form', { class: 'form', id: 'round-form' });
       const courseInput = h('input', { id: 'round-course', name: 'course', type: 'text', list: listId, autocomplete: 'off', value: r.course || '', placeholder: 'Where did you play?', autofocus: !round && !r.course });
-      const scoreInput = Object.assign(numberInput('score', r.score, { min: 18, max: 200, required: true, placeholder: 'Total' }), { className: 'score-input', autofocus: !round && !!r.course });
+      const scoreInput = Object.assign(numberInput('score', r.score, { min: 18, max: 200, required: true, placeholder: 'Total' }), { className: 'score-input', autofocus: !round && !!r.course && !card, readOnly: !!card });
       const parInput = numberInput('par', r.par, { min: 27, max: 80, placeholder: holes === 9 ? '36' : '72' });
       const ratingInput = numberInput('rating', r.rating, { min: 25, max: 85, step: '0.1', placeholder: '71.4' });
       const slopeInput = numberInput('slope', r.slope, { min: 55, max: 155, placeholder: '128' });
@@ -91,6 +98,21 @@ export function roundSheet(ctx, { round, prefill } = {}) {
         },
       });
 
+      // Scoring hole by hole takes what's in the form so far onto the course.
+      const holeByHole = () => {
+        const data = Object.fromEntries(new FormData(form));
+        close();
+        ctx.actions.startRound({ ...r, id: round && round.id, course: data.course || '', date: data.date, holes, rating: num(data.rating), slope: num(data.slope) });
+      };
+      const cardField = card
+        ? h('div', { class: 'field' },
+          h('span', { class: 'label' }, 'Card'),
+          cardGrid(card),
+          h('p', { class: 'field-hint' }, 'The score is added up from the card. A hole you picked up on counts as net double bogey.'),
+          h('button', { class: 'link-btn', type: 'button', onclick: holeByHole }, icon('edit', 16), h('span', null, 'Change the card')))
+        : h('button', { class: 'link-btn hole-by-hole', type: 'button', onclick: holeByHole },
+          icon('flag', 16), h('span', null, round ? 'Add the card hole by hole' : 'Score hole by hole instead'));
+
       const picker = show.partners || ctx.friends().length ? partnerPicker(ctx, r.friendIds || []) : null;
       const courseFields = [show.par ? field('Par', parInput) : null, show.rating ? field('Rating', ratingInput) : null, show.rating ? field('Slope', slopeInput) : null].filter(Boolean);
 
@@ -103,9 +125,10 @@ export function roundSheet(ctx, { round, prefill } = {}) {
         h('div', { class: 'field-row' },
           field('Score', scoreInput),
           show.points ? field('Stableford points', numberInput('points', r.points, { min: 0, max: 60 })) : null),
+        cardField,
         h('div', { class: 'field-row field-row-holes' },
           field('Date', h('input', { name: 'date', type: 'date', required: true, value: r.date, max: '2100-12-31' })),
-          h('div', { class: 'field' }, h('span', { class: 'label' }, 'Holes'), holesControl)),
+          h('div', { class: 'field' }, h('span', { class: 'label' }, 'Holes'), card ? h('p', { class: 'static-value' }, String(holes)) : holesControl)),
         courseFields.length ? h('div', { class: `field-row ${courseFields.length === 3 ? 'field-row-3' : ''}` }, courseFields) : null,
         show.rating ? h('p', { class: 'field-hint field-hint-row' }, 'Rating and slope are printed on the scorecard for your tees. They’re used to estimate your handicap, and are filled in for courses you’ve played before.') : null,
         show.putts || show.fairways || show.greens ? h('div', { class: 'field-row field-row-3' },
@@ -133,7 +156,12 @@ export function roundSheet(ctx, { round, prefill } = {}) {
         for (const k of ['par', 'rating', 'slope', 'points', 'putts', 'fairways', 'greens']) if (k in data) saved[k] = num(data[k]);
         if ('notes' in data) saved.notes = data.notes.trim();
         if (picker) saved.friendIds = picker.value();
+        if (card) saved.card = card;
+        else delete saved.card;
+        // His index on the day, for the handicap maths later (WHS uses the index at the time of play).
+        saved.indexAtPlay = r.indexAtPlay ?? (round ? round.indexAtPlay ?? null : ctx.currentIndex());
         ctx.actions.saveRound(saved);
+        if (fromCard) ctx.actions.clearLive();
         close();
       });
 
@@ -292,17 +320,83 @@ export function emailSheet(ctx, id) {
   });
 }
 
+/** When a course's name isn't enough to find it ("Casa Club" just means clubhouse), he picks it on the map. */
+function placePicker(ctx, name, onPicked) {
+  openDialog({
+    title: 'Find the course',
+    className: 'sheet-small',
+    build: (close) => {
+      const input = h('input', { type: 'search', value: name, 'aria-label': 'Course name or town', autocomplete: 'off', autofocus: true });
+      const results = h('ul', { class: 'list place-list' });
+      const say = (text) => results.replaceChildren(h('li', { class: 'place-note' }, text));
+      const search = async (e) => {
+        e.preventDefault();
+        if (!input.value.trim()) return;
+        say('Searching…');
+        try {
+          const found = await searchPlaces(input.value.trim());
+          if (!found.length) return say('Nothing found. Try the club’s full name, or add the town.');
+          results.replaceChildren(...found.map((p) => h('li', null,
+            h('button', {
+              class: 'row', type: 'button',
+              onclick: () => { ctx.actions.setPlace(name, p); close(); if (onPicked) onPicked(); },
+            },
+            h('span', { class: 'row-main' }, h('span', { class: 'row-title' }, p.name), h('span', { class: 'row-meta' }, p.where)),
+            p.golf ? icon('flag', 18) : null))));
+        } catch {
+          say('Couldn’t reach the map. Check the connection and try again.');
+        }
+      };
+      return {
+        body: [
+          h('p', { class: 'dialog-text' }, `Search for ${name} by its full name or its town, then pick it. Its forecast will come from there from now on.`),
+          h('form', { class: 'place-search', onsubmit: search }, input, h('button', { class: 'btn btn-primary', type: 'submit' }, 'Search')),
+          results,
+        ],
+      };
+    },
+  });
+}
+
+/** Under the forecast: which course it's for, and a way to put it right. Filled in once the lookup is done. */
+function placeRow(ctx, item, closeSheet) {
+  const row = h('div', { class: 'place-row', hidden: true });
+  if (ctx.demo || !ctx.settings.weather || !item.course || !inRange(item.date, today())) return row;
+  ctx.forecast(item).then(() => {
+    const place = ctx.placeOf(item.course);
+    if (place === null) return; // not looked up, e.g. no signal
+    const pick = () => { closeSheet(); placePicker(ctx, item.course, () => upcomingSheet(ctx, item)); };
+    row.replaceChildren(...(place === false
+      ? [h('span', null, `No forecast: “${item.course}” wasn’t found on the map.`), h('button', { class: 'link-btn', type: 'button', onclick: pick }, 'Find it on the map')]
+      : [h('span', null, `Forecast for ${place.name}`), h('button', { class: 'link-btn', type: 'button', onclick: pick }, 'Not the right place?')]));
+    row.hidden = false;
+  });
+  return row;
+}
+
 export function upcomingSheet(ctx, item) {
+  const shots = ctx.shotsAt(item.course);
+  const index = ctx.currentIndex();
+  const known = ctx.course(item.course);
   openDialog({
     title: item.title,
     build: (close) => ({
       body: [
         ticket(item, { ctx, kicker: item.type === 'event' ? 'Competition' : 'Tee time' }),
-        item.notes ? facts([['Notes', item.notes]]) : null,
+        weatherLine(ctx, item, { detailed: true }),
+        placeRow(ctx, item, close),
+        facts([
+          ['Your shots', shots !== null ? `${shotsLabel(shots)} · index ${formatIndex(index)}, slope ${known.slope}` : ''],
+          ['Notes', item.notes],
+        ]),
+        item.date === today() ? h('button', {
+          class: 'btn btn-primary btn-wide', type: 'button',
+          onclick: () => { close(); ctx.actions.startRound({ course: item.course || '', date: item.date }); },
+        }, icon('flag', 18), h('span', null, 'Score hole by hole')) : null,
         h('div', { class: 'sheet-actions' },
           (() => {
             const cal = calendarLink(ctx, { title: item.type === 'event' ? item.title : `Golf: ${item.title}`, date: item.date, time: item.time, location: item.course || '', details: item.ref ? `Booking ref ${item.ref}` : item.notes || '' });
-            return h('a', { class: 'btn btn-primary', target: '_blank', rel: 'noopener noreferrer', href: cal.href }, icon('calendar', 18), h('span', null, cal.label));
+            return h('a', { class: `btn ${item.date === today() ? '' : 'btn-primary'}`, target: '_blank', rel: 'noopener noreferrer', href: cal.href }, icon('calendar', 18), h('span', null, cal.label));
           })(),
           item.emailId ? h('button', { class: 'btn', type: 'button', onclick: () => { close(); emailSheet(ctx, item.emailId); } }, icon('mail', 18), h('span', null, 'View email')) : null,
           item.manual ? h('button', { class: 'btn', type: 'button', onclick: () => { close(); teeTimeSheet(ctx, ctx.state.teeTimes[item.id]); } }, icon('edit', 18), h('span', null, 'Edit')) : null),

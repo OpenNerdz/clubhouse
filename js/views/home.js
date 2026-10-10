@@ -2,6 +2,7 @@ import { h, icon, card, empty, greeting, formatLongDay, formatTime, today, timeA
 import { scoreChart } from '../chart.js';
 import { mailRow, upcomingRow, nextUp, roundRow, resultRow, statStrip, connectCard, shortCourse } from './common.js';
 import { roundSheet, teeTimeSheet } from './sheets.js';
+import { liveCard } from './play.js';
 
 const seeAll = (href, text = 'See all') => h('a', { class: 'link', href }, text, icon('chevron', 16));
 const SHOWN = 3; // tee sheet lines under the ticket before "Show more"
@@ -56,9 +57,17 @@ export function homeView(ctx) {
   if (show.upcoming) {
     const items = ctx.upcoming();
     const addTeeTime = h('button', { class: 'btn btn-small', type: 'button', onclick: () => teeTimeSheet(ctx) }, icon('plus', 16), h('span', null, 'Add tee time'));
+    // On the day, the card can be kept hole by hole from here.
+    const first = items[0];
+    const onTheDay = first && first.date === today() && !ctx.live
+      ? h('div', { class: 'ticket-actions' }, h('button', {
+        class: 'btn btn-primary btn-small', type: 'button',
+        onclick: () => ctx.actions.startRound({ course: first.course || '', date: first.date }),
+      }, icon('flag', 16), h('span', null, 'Score hole by hole')))
+      : null;
     main.push(card({ title: 'Coming up', action: addTeeTime, className: 'card-upcoming' },
       items.length
-        ? [nextUp(ctx, items[0]), items.length > 1 ? upcomingList(ctx, items.slice(1)) : null]
+        ? [nextUp(ctx, first), onTheDay, items.length > 1 ? upcomingList(ctx, items.slice(1)) : null]
         : empty(hasMail ? 'Nothing booked. Tee times and competitions from your email will show here.' : 'Nothing booked. Add a tee time, or connect your email to pick them up automatically.')));
   }
 
@@ -100,7 +109,7 @@ export function homeView(ctx) {
         h('p', { class: 'kicker' }, formatLongDay(today())),
         h('h1', null, name ? `${greeting()}, ${name}` : greeting()),
         ctx.connected && !ctx.demo && meta.lastScan ? h('p', { class: 'page-sub' }, `Email checked ${timeAgo(meta.lastScan)}`) : null)),
-    played ? returnCard(ctx, played) : null,
+    ctx.live ? liveCard(ctx, ctx.live) : played ? returnCard(ctx, played) : null,
     !hasMail ? connectCard(ctx) : null,
     show.stats ? statStrip(ctx) : null,
     main.length || side.length

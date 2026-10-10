@@ -7,10 +7,167 @@ const mean = (xs) => (xs.length ? xs.reduce((s, x) => s + x, 0) / xs.length : nu
 const live = (obj) => Object.values(obj || {}).filter((x) => !x.deleted);
 const norm = (s = '') => s.toLowerCase().replace(/[^a-z0-9]/g, '');
 
-/** World Handicap System score differential, or null if the round can't produce one. */
+/* ---------- course handicap, shots and the hole-by-hole card ---------- */
+
+// "Oakmere Golf Club" and "Oakmere GC" are the same course.
+const courseName = (s = '') => norm(s.replace(/\s+(?:Golf\s*(?:&|and)\s*Country\s+Club|Golf\s+Club|Golf\s+Course|Country\s+Club|G\.?C\.?)$/i, ''));
+
+/** The saved course (par, rating, slope, hole card) for a course name from an email or a form. */
+export function courseRecord(courses, name) {
+  if (!name) return null;
+  const want = courseName(name);
+  return live(courses).find((c) => courseName(c.name) === want) || null;
+}
+
+/** A Handicap Index as a number: "+1.2" (a plus handicap) is -1.2. */
+export function indexValue(v) {
+  if (v === null || v === undefined || v === '') return null;
+  if (typeof v === 'number') return Number.isFinite(v) ? v : null;
+  const s = String(v).trim();
+  const n = parseFloat(s.replace(/^\+/, ''));
+  if (!Number.isFinite(n)) return null;
+  return s.startsWith('+') ? -n : n;
+}
+
+// A 9-hole round may have been given the 18-hole rating and par from the card; halve them if so.
+const nineRating = (rating) => (rating > 50 ? rating / 2 : rating);
+const ninePar = (par) => (par > 45 ? par / 2 : par);
+
+function rawCourseHandicap(index, { rating, slope, par, holes = 18 } = {}) {
+  const idx = indexValue(index);
+  if (idx === null || !rating || !slope) return null;
+  const nine = holes === 9;
+  const r = nine ? nineRating(rating) : rating;
+  const p = par ? (nine ? ninePar(par) : par) : r;
+  return (nine ? idx / 2 : idx) * (slope / 113) + (r - p);
+}
+
+/**
+ * WHS course handicap: the shots he gets over the holes he's playing, from his
+ * index and the course's rating, slope and par. Null without a rating and slope.
+ */
+export function courseHandicap(index, course) {
+  const raw = rawCourseHandicap(index, course);
+  return raw === null ? null : Math.round(raw);
+}
+
+/**
+ * Shots for a round he's scoring hole by hole: the course handicap when the
+ * rating and slope are known, otherwise his index as a rough guide.
+ * `allowance` is 0.95 for Stableford points, as clubs use for individual play.
+ */
+export function roundShots(index, course, allowance = 1) {
+  const idx = indexValue(index);
+  if (idx === null) return null;
+  const raw = rawCourseHandicap(idx, course);
+  const holes = (course && course.holes) || 18;
+  return Math.round((raw === null ? (holes === 9 ? idx / 2 : idx) : raw) * allowance);
+}
+
+/** "16 shots", "Scratch", or "Plus 2" for a plus handicap. */
+export function shotsLabel(n) {
+  if (n === null || n === undefined) return '';
+  if (n === 0) return 'Scratch';
+  return n < 0 ? `Plus ${-n}` : `${n} shot${n === 1 ? '' : 's'}`;
+}
+
+/**
+ * The shots he gets on each hole of a card, given out by stroke index: 20 shots
+ * over 18 holes is two on the two hardest holes and one on the rest. A plus
+ * handicap gives shots back on the easiest holes. Without stroke indexes the
+ * shots are spread evenly, which is near enough for a running total.
+ */
+export function shotsPerHole(card, shots) {
+  const n = card.length;
+  if (!n || !shots) return card.map(() => 0);
+  if (card.some((x) => !x.si)) return card.map(() => shots / n);
+  const order = card.map((_, i) => i).sort((a, b) => card[a].si - card[b].si);
+  const abs = Math.abs(shots);
+  const base = Math.floor(abs / n);
+  const extra = abs % n;
+  const out = new Array(n).fill(0);
+  order.forEach((hole, rank) => {
+    const more = shots < 0 ? rank >= n - extra : rank < extra;
+    const given = base + (more ? 1 : 0);
+    out[hole] = shots < 0 ? -given || 0 : given;
+  });
+  return out;
+}
+
+/**
+ * The most a hole can count for his handicap: net double bogey (par + 2 + his
+ * shots there), or par + 5 before he has an index. Also what a picked-up hole scores.
+ */
+function holeCap(hole, shots) {
+  return shots === null ? hole.par + 5 : hole.par + 2 + Math.ceil(shots);
+}
+
+const played = (hole) => hole.picked || (hole.strokes !== null && hole.strokes !== undefined);
+export const holesPlayed = (card) => card.filter(played).length;
+
+/** Strokes for the holes played so far, a picked-up hole counting as net double bogey. */
+export function cardScore(card, shots) {
+  const per = shots === null ? null : shotsPerHole(card, shots);
+  let total = 0;
+  card.forEach((hole, i) => {
+    if (hole.picked) total += holeCap(hole, per && per[i]);
+    else if (played(hole)) total += hole.strokes;
+  });
+  return total;
+}
+
+/** WHS adjusted gross score: every hole capped at net double bogey. */
+export function adjustedGross(card, shots) {
+  const per = shots === null ? null : shotsPerHole(card, shots);
+  return card.reduce((sum, hole, i) => {
+    const cap = holeCap(hole, per && per[i]);
+    return sum + (hole.picked || !played(hole) ? cap : Math.min(hole.strokes, cap));
+  }, 0);
+}
+
+/** Stableford points on one hole: two for a net par, one more for each shot better. */
+export function holePoints(hole, shots) {
+  if (hole.picked || !played(hole)) return 0;
+  return Math.max(0, Math.round(2 + hole.par + shots - hole.strokes));
+}
+
+/** Stableford points for the holes played so far. */
+export function cardPoints(card, shots) {
+  const per = shotsPerHole(card, shots || 0);
+  return card.reduce((sum, hole, i) => sum + holePoints(hole, per[i]), 0);
+}
+
+/** Par for the holes played so far. */
+export const cardPar = (card) => card.filter(played).reduce((sum, hole) => sum + hole.par, 0);
+
+/** "Birdie", "Par", "Double bogey"… for a score on a hole. */
+export function scoreName(strokes, par) {
+  const d = strokes - par;
+  if (strokes === 1) return 'Hole in one';
+  return { '-3': 'Albatross', '-2': 'Eagle', '-1': 'Birdie', 0: 'Par', 1: 'Bogey', 2: 'Double bogey', 3: 'Triple bogey' }[d] || (d > 0 ? `+${d}` : `${d}`);
+}
+
+/** The score that counts for his handicap: the adjusted gross score when there's a card. */
+function handicapScore(r) {
+  if (Array.isArray(r.card) && r.card.length === (r.holes || 18)) {
+    return adjustedGross(r.card, courseHandicap(r.indexAtPlay, r));
+  }
+  return r.score;
+}
+
+/**
+ * World Handicap System score differential, or null if the round can't produce one.
+ * A 9-hole round counts once his index at the time is known: its 9-hole
+ * differential plus the score expected of him on the other nine.
+ */
 export function differential(r) {
-  if (!r || (r.holes || 18) !== 18 || !r.score || !r.rating || !r.slope) return null;
-  return round1((113 / r.slope) * (r.score - r.rating));
+  if (!r || !r.score || !r.rating || !r.slope) return null;
+  const holes = r.holes || 18;
+  const score = handicapScore(r);
+  if (holes === 18) return round1((113 / r.slope) * (score - r.rating));
+  const idx = indexValue(r.indexAtPlay);
+  if (holes !== 9 || idx === null) return null;
+  return round1((113 / r.slope) * (score - nineRating(r.rating)) + (idx * 0.52 + 1.2));
 }
 
 // How many of the lowest differentials count, and the adjustment, when there are fewer than 20.
@@ -28,6 +185,33 @@ export function handicapIndex(rounds) {
   const [count, adjust] = entry;
   const best = diffs.sort((a, b) => a - b).slice(0, count);
   return Math.min(54, round1(mean(best) + adjust));
+}
+
+const isoOf = (ms) => {
+  const d = new Date(ms);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
+
+/** His official index from each handicap email, oldest first (one per day). */
+export function officialIndexHistory(emails) {
+  const byDay = new Map();
+  for (const e of [...emails].sort((a, b) => a.date - b.date)) {
+    const v = e.category === 'handicap' ? indexValue(e.details && e.details.index) : null;
+    if (v !== null) byDay.set(isoOf(e.date), v);
+  }
+  return [...byDay].map(([date, value]) => ({ date, value }));
+}
+
+/** His estimated index after each round that counts towards it, oldest first. */
+export function estimatedIndexHistory(roundsObj) {
+  const all = live(roundsObj).sort((a, b) => byDateDesc(b, a));
+  const out = [];
+  all.forEach((r, i) => {
+    if (differential(r) === null) return;
+    const value = handicapIndex(all.slice(0, i + 1));
+    if (value !== null) out.push({ date: r.date, value, course: r.course });
+  });
+  return out;
 }
 
 export function roundStats(roundsObj, year = new Date().getFullYear()) {
@@ -77,13 +261,10 @@ export function bookingsFromEmails(emails) {
   for (const e of sorted) {
     const d = e.details;
     let g = d.ref && groups.find((x) => x.ref === d.ref);
-    if (!g) {
-      g = groups.find((x) =>
-        x.date === d.date &&
-        (!x.time || !d.time || x.time === d.time) &&
-        (!x.course || !d.course || norm(x.course) === norm(d.course)) &&
-        (!x.ref || !d.ref));
-    }
+    const sameDay = (x) => x.date === d.date && (!x.course || !d.course || norm(x.course) === norm(d.course)) && (!x.ref || !d.ref);
+    if (!g) g = groups.find((x) => sameDay(x) && (!x.time || !d.time || x.time === d.time));
+    // "Your tee time has changed" with no booking reference: a new time for that day's booking.
+    if (!g && d.status === 'changed') g = groups.filter(sameDay).pop();
     if (!g) {
       g = { id: `b-${e.id}`, emailIds: [] };
       groups.push(g);

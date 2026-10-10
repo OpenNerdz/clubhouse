@@ -184,7 +184,7 @@ async function api(path, { method = 'GET', headers = {}, body } = {}, attempt = 
     }
     const text = await res.text().catch(() => '');
     if (/MailboxNotEnabledForRESTAPI|MailboxNotSupportedForRESTAPI|mailbox is either inactive|soft-deleted|hosted on-premise/i.test(text)) {
-      throw new Error('This Microsoft account has no Outlook mailbox that Clubhouse can read. In Settings, disconnect and sign in with the account he uses for email.');
+      throw new Error('This Microsoft account has no Outlook mailbox that Clubhouse can read. In Settings, disconnect and sign in with the account you use for email.');
     }
     let reason = '';
     try { reason = JSON.parse(text).error.message || ''; } catch { /* not JSON */ }
@@ -231,18 +231,22 @@ async function skippedFolders() {
   return ids;
 }
 
-/** Outlook IDs of possible golf emails received since the cut-off. */
-export async function searchMessages({ months = 6, extraTerms = [], after, max = 1500 }) {
+/** Outlook IDs of possible golf emails received since the cut-off and not read before (`known` says which were). */
+export async function searchMessages({ months = 6, extraTerms = [], after, known = () => false, max = 1500 }) {
   const cutoff = Math.max(after || 0, Date.now() - months * 30.44 * DAY);
   const skip = await skippedFolders();
   const found = [];
   let url = `/me/messages?$search=${encodeURIComponent(`"${buildSearch(extraTerms)}"`)}&$select=id,receivedDateTime,parentFolderId&$top=100`;
   let more = false;
-  while (url) {
+  let past = false;
+  while (url && !past) {
     const res = await api(url);
     for (const m of res.value || []) {
       const t = Date.parse(m.receivedDateTime);
-      if (t >= cutoff && !skip.has(m.parentFolderId)) found.push({ id: m.id, t });
+      if (t >= cutoff && !skip.has(m.parentFolderId) && !known(m.id)) found.push({ id: m.id, t });
+      // Results come newest first (by date sent), so once they're well before the
+      // cut-off there's nothing newer further on and no need to page through the rest.
+      if (t < cutoff - DAY) past = true;
     }
     url = res['@odata.nextLink'] || '';
     if (found.length >= max) {

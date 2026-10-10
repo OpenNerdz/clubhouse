@@ -1,8 +1,9 @@
 // Pieces shared by several screens. The look borrows from golf's own objects:
 // the scorecard, the clubhouse honours board, the starter's ticket and tee sheet.
-import { h, googleLogo, microsoftLogo, penCircle, markerStack, formatDay, formatTime, formatEmailDate, formatFullDate, formatShortDate, timeParts, whenLabel, weekdayShort, monthShort, fromIso } from '../ui.js';
+import { h, icon, googleLogo, microsoftLogo, penCircle, markerStack, formatDay, formatTime, formatEmailDate, formatFullDate, formatShortDate, timeParts, whenLabel, weekdayShort, monthShort, fromIso } from '../ui.js';
 import { CATEGORIES } from '../parser.js';
-import { latestHandicapEmail, formatIndex, scoreToPar, resultTitle } from '../golf.js';
+import { latestHandicapEmail, formatIndex, scoreToPar, resultTitle, shotsLabel } from '../golf.js';
+import { describe } from '../weather.js';
 import { emailSheet, roundSheet, upcomingSheet } from './sheets.js';
 import { joinNames, shortNames } from './partners.js';
 
@@ -83,16 +84,42 @@ export function mailRow(ctx, e) {
         summary(e))));
 }
 
+/**
+ * The forecast for a round, filled in when it arrives (straight away once it has
+ * been fetched): "14° · 20% rain · wind 11 mph". Stays hidden when there isn't one.
+ */
+export function weatherLine(ctx, item, { detailed = false } = {}) {
+  const el = h('span', { class: `weather ${detailed ? 'weather-detailed' : ''}`, hidden: true });
+  ctx.forecast(item).then((w) => {
+    if (!w) return;
+    const sky = describe(w.code);
+    const wind = `wind ${w.wind} ${w.units.wind === 'kmh' ? 'km/h' : 'mph'}`;
+    const rain = `${w.rain}% rain`;
+    el.replaceChildren(icon(sky.icon, detailed ? 26 : 18),
+      detailed
+        ? h('span', { class: 'weather-text' },
+          h('strong', null, `${sky.text}, ${w.temp}°${w.units.temp === 'fahrenheit' ? 'F' : 'C'}`),
+          h('span', null, `${rain} · ${wind}`),
+          h('small', null, ctx.demo ? 'Sample forecast' : 'Forecast for your round · Open-Meteo'))
+        : h('span', null, `${w.temp}° · ${rain} · ${wind}`));
+    el.setAttribute('aria-label', `Forecast: ${sky.text}, ${w.temp} degrees, ${rain}, ${wind}`);
+    el.hidden = false;
+  });
+  return el;
+}
+
 const longDay = (iso) => new Intl.DateTimeFormat(undefined, { weekday: 'long', day: 'numeric', month: 'long' }).format(fromIso(iso));
 
 /** The starter's ticket: a stub with the time, then where, when and who. */
-export function ticket(item, { onClick, kicker, ctx } = {}) {
+export function ticket(item, { onClick, kicker, ctx, weather = false } = {}) {
   const soon = whenLabel(item.date);
   const t = item.time ? timeParts(item.time) : null;
   const d = fromIso(item.date);
+  const shots = ctx ? ctx.shotsAt(item.course) : null;
   const meta = [];
   if (item.type === 'event' && item.course) meta.push(item.course);
   if (item.players) meta.push(plural(item.players, 'player'));
+  if (shots !== null) meta.push(shotsLabel(shots));
   if (item.ref) meta.push(`Ref ${item.ref}`);
   return h(onClick ? 'button' : 'div', {
     class: `ticket ${item.type === 'event' ? 'ticket-event' : ''}`,
@@ -111,11 +138,12 @@ export function ticket(item, { onClick, kicker, ctx } = {}) {
       h('span', { class: 'ticket-title' }, item.title),
       h('span', { class: 'sr-only' }, longDay(item.date), item.time ? `, ${formatTime(item.time)}` : ''),
       meta.length ? h('span', { class: 'ticket-meta' }, meta.join(' · ')) : null,
-      ctx && ctx.friendsOf(item).length ? withPartners(ctx, ctx.friendsOf(item)) : null));
+      ctx && ctx.friendsOf(item).length ? withPartners(ctx, ctx.friendsOf(item)) : null,
+      weather ? weatherLine(ctx, item) : null));
 }
 
 export function nextUp(ctx, item) {
-  return ticket(item, { ctx, onClick: () => upcomingSheet(ctx, item) });
+  return ticket(item, { ctx, weather: true, onClick: () => upcomingSheet(ctx, item) });
 }
 
 /** A line on the starter's tee sheet: date, time, then what and who. */
@@ -123,9 +151,11 @@ export function upcomingRow(ctx, item) {
   const d = fromIso(item.date);
   const t = item.time ? timeParts(item.time) : null;
   const meta = [];
+  const shots = ctx.shotsAt(item.course);
   if (item.type === 'event') meta.push('Competition');
   if (item.players) meta.push(plural(item.players, 'player'));
   if (item.type === 'event' && item.course) meta.push(item.course);
+  if (shots !== null) meta.push(shotsLabel(shots));
   const soon = whenLabel(item.date);
   return h('li', null,
     h('button', { class: 'row teesheet', type: 'button', onclick: () => upcomingSheet(ctx, item) },

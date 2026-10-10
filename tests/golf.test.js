@@ -1,6 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { differential, handicapIndex, roundStats, bookingsFromEmails, upcomingItems, calendarUrl, scoreToPar, formatIndex, eventTitle, resultTitle, goodRoundIds, unscoredRounds, partnerStats, partnerCounts } from '../js/golf.js';
+import {
+  differential, handicapIndex, roundStats, bookingsFromEmails, upcomingItems, calendarUrl, scoreToPar, formatIndex, eventTitle, resultTitle, goodRoundIds, unscoredRounds, partnerStats, partnerCounts,
+  indexValue, courseHandicap, roundShots, shotsLabel, shotsPerHole, cardScore, adjustedGross, cardPoints, cardPar, holesPlayed, scoreName, officialIndexHistory, estimatedIndexHistory,
+} from '../js/golf.js';
 
 const round = (date, score, rating = 72, slope = 113, extra = {}) => ({ id: date, date, score, rating, slope, holes: 18, ...extra });
 
@@ -143,4 +146,75 @@ test('partner stats: rounds together, average and best', () => {
   assert.equal(m.last, '2026-09-15');
   assert.deepEqual([...partnerCounts(rounds).entries()].sort(), [['m', 3], ['s', 1]]);
   assert.equal(partnerStats(rounds, 'nobody').count, 0);
+});
+
+test('course handicap from index, rating, slope and par', () => {
+  const oak = { rating: 71.4, slope: 128, par: 72 };
+  assert.equal(courseHandicap(14.6, oak), 16);
+  assert.equal(courseHandicap('14.6', oak), 16);
+  assert.equal(courseHandicap('+1.2', oak), -2, 'a plus handicap gives shots back');
+  assert.equal(courseHandicap(14.6, { ...oak, holes: 9 }), 8, '9 holes: half the index, and the 18-hole rating halved');
+  assert.equal(courseHandicap(14.6, { par: 72 }), null, 'no rating or slope, no course handicap');
+  assert.equal(courseHandicap(null, oak), null);
+  assert.equal(roundShots(14.6, oak, 0.95), 15, '95% for Stableford');
+  assert.equal(roundShots(14.6, {}), 15, 'his index as a guide when the course isn’t known');
+  assert.equal(roundShots(null, oak), null);
+  assert.equal(indexValue('+0.4'), -0.4);
+  assert.deepEqual([shotsLabel(16), shotsLabel(1), shotsLabel(0), shotsLabel(-2)], ['16 shots', '1 shot', 'Scratch', 'Plus 2']);
+});
+
+const card18 = (strokes = []) => Array.from({ length: 18 }, (_, i) => ({ par: 4, si: i + 1, strokes: strokes[i] ?? null }));
+
+test('shots are given out by stroke index', () => {
+  const shots = shotsPerHole(card18(), 20);
+  assert.deepEqual([shots[0], shots[1], shots[2], shots[17]], [2, 2, 1, 1]);
+  const plus = shotsPerHole(card18(), -2);
+  assert.deepEqual([plus[0], plus[15], plus[16], plus[17]], [0, 0, -1, -1], 'given back on the easiest holes');
+  const front = [7, 3, 17, 1, 11, 5, 15, 9, 13].map((si) => ({ par: 4, si }));
+  assert.deepEqual(shotsPerHole(front, 8), [1, 1, 0, 1, 1, 1, 1, 1, 1], '9 holes: the hardest 8 of the nine');
+  const noSi = [{ par: 4 }, { par: 4 }];
+  assert.deepEqual(shotsPerHole(noSi, 1), [0.5, 0.5], 'spread evenly without stroke indexes');
+});
+
+test('a hole-by-hole card: score, net double bogey and Stableford points', () => {
+  const card = card18([9, null, ...Array(16).fill(5)]);
+  card[1].picked = true;
+  assert.equal(holesPlayed(card), 18);
+  assert.equal(cardPar(card), 72);
+  assert.equal(cardScore(card, 18), 96, 'the pick-up counts as net double bogey (7)');
+  assert.equal(adjustedGross(card, 18), 94, 'the 9 is capped at net double bogey too');
+  assert.equal(adjustedGross(card, null), 98, 'no index yet: capped at par + 5');
+  assert.equal(cardPoints(card, 18), 32);
+  const half = card18([4, 5, 6]);
+  assert.equal(holesPlayed(half), 3);
+  assert.equal(cardScore(half, 18), 15);
+  assert.equal(cardPoints(half, 18), 3 + 2 + 1);
+  assert.deepEqual([scoreName(3, 4), scoreName(4, 4), scoreName(6, 4), scoreName(9, 4), scoreName(1, 3)], ['Birdie', 'Par', 'Double bogey', '+5', 'Hole in one']);
+});
+
+test('the handicap uses the adjusted score from a card, and 9-hole rounds count once his index is known', () => {
+  const card = card18([9, null, ...Array(16).fill(5)]);
+  card[1].picked = true;
+  const r = { date: '2026-05-01', holes: 18, score: 96, rating: 72, slope: 113, par: 72, card, indexAtPlay: 18 };
+  assert.equal(differential(r), 22);
+  assert.equal(differential({ ...r, card: undefined }), 24);
+  assert.equal(differential({ date: '2026-05-02', holes: 9, score: 42, rating: 35, slope: 120, indexAtPlay: 14 }), 15.1);
+  assert.equal(differential({ date: '2026-05-02', holes: 9, score: 42, rating: 70, slope: 120, indexAtPlay: '14.0' }), 15.1, 'an 18-hole rating is halved');
+});
+
+test('a changed tee time with no booking reference replaces the old time', () => {
+  const b = bookingsFromEmails([
+    mail('1', '2026-10-01', { date: '2026-10-17', time: '08:30', course: 'Oak GC', status: 'confirmed' }),
+    mail('2', '2026-10-03', { date: '2026-10-17', time: '09:10', course: 'Oak GC', status: 'changed' }),
+    mail('3', '2026-10-04', { date: '2026-10-17', time: '14:00', course: 'Oak GC', status: 'confirmed' }),
+  ]);
+  assert.deepEqual(b.map((x) => `${x.time} ${x.status}`), ['09:10 changed', '14:00 confirmed'], 'a second booking that day stays separate');
+});
+
+test('index history: official from email, or estimated round by round', () => {
+  const hcp = (id, date, index) => ({ id, category: 'handicap', date: new Date(date).getTime(), details: { index } });
+  assert.deepEqual(officialIndexHistory([hcp('b', '2026-09-20T09:00', '14.6'), hcp('a', '2026-08-01T09:00', '15.1'), { id: 'c', category: 'teetime', date: 0, details: {} }]),
+    [{ date: '2026-08-01', value: 15.1 }, { date: '2026-09-20', value: 14.6 }]);
+  const rounds = Object.fromEntries([90, 88, 86, 84].map((s, i) => [`r${i}`, round(`2026-01-0${i + 1}`, s)]));
+  assert.deepEqual(estimatedIndexHistory(rounds).map((x) => x.value), [12, 11], '3 rounds: best one minus 2; 4 rounds: best one minus 1');
 });

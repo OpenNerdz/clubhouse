@@ -34,6 +34,9 @@ export function defaultSettings() {
     hiddenSenders: [],
     notPlayed: [],
     handicapEstimate: true,
+    weather: true,
+    gps: false,
+    distance: 'auto',
     driveBackup: true,
     theme: 'auto',
     textSize: 'normal',
@@ -49,8 +52,9 @@ export function emptyState() {
     courses: {},
     friends: {},
     emails: {},
-    // Local to this device; never synced.
-    meta: { onboarded: false, demo: false, profile: null, lastScan: 0, lastBackup: 0, driveFileId: null, skipped: [] },
+    // Local to this device; never synced. `live` is a round being scored hole by
+    // hole; `places` remembers where courses are, for the weather.
+    meta: { onboarded: false, demo: false, profile: null, lastScan: 0, lastBackup: 0, driveFileId: null, skipped: [], live: null, places: {} },
   };
 }
 

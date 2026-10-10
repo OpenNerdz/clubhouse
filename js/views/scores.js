@@ -1,9 +1,22 @@
 import { h, icon, card, penCircle } from '../ui.js';
-import { scoreChart } from '../chart.js';
-import { latestHandicapEmail } from '../golf.js';
+import { scoreChart, trendChart } from '../chart.js';
+import { latestHandicapEmail, officialIndexHistory, estimatedIndexHistory, formatIndex } from '../golf.js';
 import { roundRow, statStrip } from './common.js';
 import { roundSheet } from './sheets.js';
 import { partnersCard } from './partners.js';
+
+/** How his handicap has moved: from his handicap emails, or else the estimate after each round. */
+function handicapCard(ctx) {
+  const official = officialIndexHistory(ctx.emails());
+  const estimated = ctx.settings.handicapEstimate ? estimatedIndexHistory(ctx.state.rounds) : [];
+  // Official figures when there are a few of them; until then the estimate tells more of a story.
+  const fromEmail = official.length >= 3 || (official.length === 2 && estimated.length < 2);
+  const points = (fromEmail ? official : estimated).slice(-20);
+  if (points.length < 2) return null;
+  return card({ title: 'Handicap', className: 'card-chart' },
+    h('p', { class: 'card-sub' }, fromEmail ? 'From your handicap emails · lowest ringed' : 'Estimated after each round · lowest ringed'),
+    trendChart(points.map((p) => ({ date: p.date, value: p.value, note: p.course })), { name: 'Handicap index', format: formatIndex, height: 170, onCleanup: ctx.onCleanup }));
+}
 
 export function scoresView(ctx) {
   const rounds = ctx.rounds();
@@ -54,6 +67,7 @@ export function scoresView(ctx) {
         scoreChart(full, { onCleanup: ctx.onCleanup }),
         averagesRow)
       : averagesRow ? card({}, averagesRow) : null,
+    handicapCard(ctx),
     rounds.length || ctx.friends().length ? partnersCard(ctx) : null,
     rounds.length
       ? byYear.map((g) => card({ title: g.year, className: 'card-scorecard' },
