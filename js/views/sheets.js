@@ -1,5 +1,5 @@
 // Pop-up sheets: forms for rounds and tee times, and detail views.
-import { h, add, icon, openDialog, confirmDialog, today, formatLongDay, formatTime, formatFullDate, formatEmailDate, segmented } from '../ui.js';
+import { h, add, icon, openDialog, confirmDialog, today, formatLongDay, formatTime, formatFullDate, formatEmailDate, segmented, whenLabel } from '../ui.js';
 import { CATEGORIES } from '../parser.js';
 import { calendarUrl, outlookCalendarUrl, differential, formatIndex } from '../golf.js';
 import { categoryBadge, ordinal } from './common.js';
@@ -222,7 +222,7 @@ export function emailSheet(ctx, id) {
         body: [
           h('div', { class: 'email-from' },
             categoryBadge(e.category, { withLabel: true }),
-            h('span', { class: 'email-sender' }, e.fromName, e.fromName !== e.fromEmail ? h('span', { class: 'muted' }, ` <${e.fromEmail}>`) : null),
+            h('span', { class: 'email-sender', title: e.fromEmail }, e.fromName),
             h('span', { class: 'muted' }, formatEmailDate(e.date))),
           facts(rows),
           e.snippet ? h('blockquote', { class: 'snippet' }, e.snippet) : null,
@@ -255,8 +255,11 @@ export function upcomingSheet(ctx, item) {
     title: item.title,
     build: (close) => ({
       body: [
+        h('div', { class: 'when-block' },
+          h('span', { class: 'when-kicker' }, item.type === 'event' ? 'Competition' : 'Tee time', whenLabel(item.date) ? ` · ${whenLabel(item.date)}` : ''),
+          h('span', { class: 'when-day' }, formatLongDay(item.date)),
+          item.time ? h('span', { class: 'when-time' }, formatTime(item.time)) : null),
         facts([
-          ['When', `${formatLongDay(item.date)}${item.time ? `, ${formatTime(item.time)}` : ''}`],
           ['Course', item.type === 'event' ? item.course : ''],
           ['Players', item.players],
           ['Booking ref', item.ref],

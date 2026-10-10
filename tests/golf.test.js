@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { differential, handicapIndex, roundStats, bookingsFromEmails, upcomingItems, calendarUrl, scoreToPar, formatIndex, eventTitle } from '../js/golf.js';
+import { differential, handicapIndex, roundStats, bookingsFromEmails, upcomingItems, calendarUrl, scoreToPar, formatIndex, eventTitle, resultTitle } from '../js/golf.js';
 
 const round = (date, score, rating = 72, slope = 113, extra = {}) => ({ id: date, date, score, rating, slope, holes: 18, ...extra });
 
@@ -77,6 +77,13 @@ test('event titles drop email boilerplate', () => {
   assert.equal(eventTitle('Draw published - Club Championship'), 'Club Championship');
   assert.equal(eventTitle('Winter Fourball Series: entries now open'), 'Winter Fourball Series');
   assert.equal(eventTitle('Seniors Open'), 'Seniors Open');
+});
+
+test('result titles drop email boilerplate', () => {
+  assert.equal(resultTitle('Results: October Medal'), 'October Medal');
+  assert.equal(resultTitle('Saturday Stableford results'), 'Saturday Stableford');
+  assert.equal(resultTitle('Monthly Medal - results now available'), 'Monthly Medal');
+  assert.equal(resultTitle('Results'), 'Results');
 });
 
 test('formatting', () => {

@@ -91,6 +91,15 @@ export function eventTitle(subject = '') {
   return t || subject;
 }
 
+/** "Results: October Medal" → "October Medal"; "Saturday Stableford results" → "Saturday Stableford". */
+export function resultTitle(subject = '') {
+  const t = subject
+    .replace(/^(?:your\s+)?results?\s*(?:for|of)?\s*[:\-–—]\s*/i, '')
+    .replace(/\s*[:\-–—]?\s*(?:results?|leaderboard)\s*(?:are\s+)?(?:now\s+)?(?:in|out|available|published)?\s*!?$/i, '')
+    .trim();
+  return t || subject;
+}
+
 /** Everything coming up: booked tee times, competitions entered and tee times added by hand. */
 export function upcomingItems({ emails, teeTimes }, today) {
   const items = [];

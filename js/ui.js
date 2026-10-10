@@ -265,6 +265,18 @@ export function switchRow({ id, label, hint, checked, onChange }) {
     h('input', { id, type: 'checkbox', role: 'switch', class: 'switch', checked: !!checked, onchange: (e) => onChange(e.target.checked) }));
 }
 
+/** A row of pill toggles for choosing several things at once (e.g. which sections to show). */
+export function toggleChips({ id, label, options, onChange }) {
+  return h('div', { class: 'togglechips', role: 'group', 'aria-label': label },
+    options.map(([key, text, on]) => h('button', {
+      id: `${id}-${key}`,
+      class: `togglechip ${on ? 'on' : ''}`,
+      type: 'button',
+      'aria-pressed': on ? 'true' : 'false',
+      onclick: () => onChange(key, !on),
+    }, on ? icon('check', 16) : null, h('span', null, text))));
+}
+
 export function segmented({ id, options, value, onChange, label }) {
   return h('div', { class: 'segmented', role: 'radiogroup', 'aria-label': label },
     options.map(([val, text]) =>

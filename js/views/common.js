@@ -1,7 +1,7 @@
 // Pieces shared by several screens.
-import { h, icon, googleLogo, microsoftLogo, formatDay, formatTime, formatEmailDate, formatFullDate, whenLabel, weekdayShort, monthShort, fromIso } from '../ui.js';
+import { h, icon, googleLogo, microsoftLogo, formatDay, formatTime, formatEmailDate, formatFullDate, formatLongDay, formatShortDate, whenLabel, weekdayShort, monthShort, fromIso } from '../ui.js';
 import { CATEGORIES } from '../parser.js';
-import { latestHandicapEmail, formatIndex, scoreToPar } from '../golf.js';
+import { latestHandicapEmail, formatIndex, scoreToPar, resultTitle } from '../golf.js';
 import { emailSheet, roundSheet, upcomingSheet } from './sheets.js';
 
 export const ordinal = (n) => {
@@ -15,55 +15,54 @@ export function categoryBadge(cat, { withLabel = false } = {}) {
   return h('span', { class: `cat cat-${cat}`, title: c.label }, icon(c.icon, 16), withLabel ? h('span', null, c.label) : h('span', { class: 'sr-only' }, c.label));
 }
 
-function chip(iconName, text, tone = '') {
-  return h('span', { class: `chip ${tone}` }, iconName ? icon(iconName, 14) : null, text);
-}
+const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
+const indexChange = (d) => (d.prevIndex ? Math.round((parseFloat(d.index) - parseFloat(d.prevIndex)) * 10) / 10 : 0);
 
-/** The few most useful facts about an email, as small chips. */
-export function detailChips(e) {
+/** One short line with the facts that matter, e.g. "Tue 13 Oct · 8:30 AM · 4 players". */
+export function summary(e) {
   const d = e.details || {};
-  const out = [];
+  const parts = [];
   const when = () => {
-    if (d.date) out.push(chip('calendar', formatDay(d.date)));
-    if (d.time) out.push(chip('clock', formatTime(d.time)));
+    if (d.date) parts.push(formatDay(d.date));
+    if (d.time) parts.push(formatTime(d.time));
   };
   switch (e.category) {
     case 'teetime':
-      if (d.status === 'cancelled') out.push(chip(null, 'Cancelled', 'chip-danger'));
+      if (d.status === 'cancelled') parts.push(h('strong', { class: 'tone-danger' }, 'Cancelled'));
       when();
-      if (d.players) out.push(chip('users', `${d.players} player${d.players === 1 ? '' : 's'}`));
+      if (d.players) parts.push(plural(d.players, 'player'));
       break;
     case 'competition':
       if (d.kind === 'result') {
-        if (d.position) out.push(chip('trophy', d.field ? `${ordinal(d.position)} of ${d.field}` : ordinal(d.position)));
-        if (d.points) out.push(chip(null, `${d.points} pts`));
-        if (d.net) out.push(chip(null, `Net ${d.net}`));
-        else if (d.gross) out.push(chip(null, `Gross ${d.gross}`));
+        if (d.position) parts.push(h('strong', null, d.field ? `${ordinal(d.position)} of ${d.field}` : ordinal(d.position)));
+        if (d.points) parts.push(`${d.points} pts`);
+        if (d.net) parts.push(`Net ${d.net}`);
+        else if (d.gross) parts.push(`Gross ${d.gross}`);
       } else when();
       break;
     case 'handicap':
       if (d.index) {
-        out.push(chip('gauge', `Index ${formatIndex(d.index)}`));
-        const change = d.prevIndex ? Math.round((parseFloat(d.index) - parseFloat(d.prevIndex)) * 10) / 10 : 0;
-        if (change) out.push(chip(null, `${change < 0 ? '↓' : '↑'} ${Math.abs(change).toFixed(1)}`, change < 0 ? 'chip-good' : ''));
+        parts.push(h('strong', null, `Index ${formatIndex(d.index)}`));
+        const change = indexChange(d);
+        if (change) parts.push(h('span', { class: change < 0 ? 'tone-good' : '' }, `${change < 0 ? 'down' : 'up'} ${Math.abs(change).toFixed(1)}`));
       }
       break;
     case 'shop':
-      if (d.status) out.push(chip(null, d.status));
-      if (d.total) out.push(chip(null, d.total));
-      if (d.discount) out.push(chip('tag', d.discount));
+      for (const k of ['status', 'total', 'discount']) if (d[k]) parts.push(d[k]);
       break;
     case 'club':
-      if (d.notice) out.push(chip('info', d.notice));
+      if (d.notice) parts.push(d.notice);
       break;
     default:
       when();
   }
-  return out;
+  if (!parts.length) return null;
+  const line = h('span', { class: 'row-meta' });
+  parts.forEach((p, i) => line.append(...(i ? [' · ', p] : [p])));
+  return line;
 }
 
 export function mailRow(ctx, e) {
-  const chips = detailChips(e);
   return h('li', null,
     h('button', { class: 'row mail-row', type: 'button', onclick: () => emailSheet(ctx, e.id) },
       categoryBadge(e.category),
@@ -72,7 +71,20 @@ export function mailRow(ctx, e) {
           h('span', { class: 'row-from' }, e.fromName),
           h('span', { class: 'row-date' }, formatEmailDate(e.date))),
         h('span', { class: 'row-title' }, e.subject),
-        chips.length ? h('span', { class: 'chips' }, chips) : null)));
+        summary(e))));
+}
+
+/** The next booking, shown large: where, when and who. */
+export function nextUp(ctx, item) {
+  const soon = whenLabel(item.date);
+  const meta = [];
+  if (item.type === 'event' && item.course) meta.push(item.course);
+  if (item.players) meta.push(plural(item.players, 'player'));
+  return h('button', { class: `next ${item.type === 'event' ? 'next-event' : ''}`, type: 'button', onclick: () => upcomingSheet(ctx, item) },
+    h('span', { class: 'next-kicker' }, item.type === 'event' ? 'Next competition' : 'Next tee time', soon ? ` · ${soon}` : ''),
+    h('span', { class: 'next-title' }, item.title),
+    h('span', { class: 'next-when' }, formatLongDay(item.date), item.time ? `, ${formatTime(item.time)}` : ''),
+    meta.length ? h('span', { class: 'next-meta' }, meta.join(' · ')) : null);
 }
 
 export function upcomingRow(ctx, item) {
@@ -101,6 +113,7 @@ export function roundRow(ctx, r) {
   const meta = [formatDay(r.date)];
   if (r.holes === 9) meta.push('9 holes');
   if (r.points) meta.push(`${r.points} pts`);
+  if (r.partners) meta.push(`with ${r.partners}`);
   return h('li', null,
     h('button', { class: 'row round-row', type: 'button', onclick: () => roundSheet(ctx, { round: r }) },
       h('span', { class: 'row-main' },
@@ -123,37 +136,33 @@ export function resultRow(ctx, e) {
   return h('li', null,
     h('button', { class: 'row', type: 'button', onclick: () => emailSheet(ctx, e.id) },
       h('span', { class: 'row-main' },
-        h('span', { class: 'row-title' }, e.subject),
+        h('span', { class: 'row-title' }, resultTitle(e.subject)),
         h('span', { class: 'row-meta' }, meta.join(' · '))),
       figure ? h('span', { class: 'figure' }, figure) : null));
 }
 
-export function statTiles(ctx) {
-  const stats = ctx.stats();
-  const tiles = [];
+/** Handicap, average and best score in one compact strip. */
+export function statStrip(ctx) {
+  const s = ctx.stats();
+  const items = [];
   const official = latestHandicapEmail(ctx.emails());
   if (official) {
-    tiles.push(tile('Handicap index', formatIndex(official.details.index), `From email, ${formatEmailDate(official.date)}`));
+    const change = indexChange(official.details);
+    items.push(stat('Handicap', formatIndex(official.details.index),
+      change ? h('span', { class: change < 0 ? 'tone-good' : '' }, `${change < 0 ? '↓' : '↑'} ${Math.abs(change).toFixed(1)}`) : 'Official'));
   } else if (ctx.settings.handicapEstimate) {
-    tiles.push(stats.index !== null
-      ? tile('Handicap index', formatIndex(stats.index), 'Estimate from your scores')
-      : tile('Handicap index', '–', 'Needs 3 rounds with course rating', true));
+    items.push(stat('Handicap', s.index !== null ? formatIndex(s.index) : '–', s.index !== null ? 'Estimate' : 'Needs 3 rounds'));
   }
-  tiles.push(stats.average !== null
-    ? tile('Average score', String(stats.average), `Last ${stats.averageOf} round${stats.averageOf === 1 ? '' : 's'}`)
-    : tile('Average score', '–', 'No 18-hole rounds yet', true));
-  tiles.push(stats.best
-    ? tile('Best round', String(stats.best.score), `${stats.best.course ? `${shortCourse(stats.best.course)}, ` : ''}${formatDay(stats.best.date)}`)
-    : tile('Best round', '–', 'No 18-hole rounds yet', true));
-  tiles.push(tile(`Rounds in ${new Date().getFullYear()}`, String(stats.thisYear), stats.count > stats.thisYear ? `${stats.count} in total` : 'Keep it up', !stats.thisYear));
-  return h('div', { class: 'tiles' }, tiles);
+  items.push(stat('Average', s.average !== null ? String(s.average) : '–', s.average !== null ? `Last ${s.averageOf}` : 'No rounds yet'));
+  items.push(stat('Best', s.best ? String(s.best.score) : '–', s.best ? formatShortDate(s.best.date) : 'No rounds yet'));
+  return h('section', { class: 'stats', 'aria-label': 'Your game' }, items);
 }
 
-function tile(label, value, note, muted = false) {
-  return h('div', { class: `tile ${muted ? 'tile-muted' : ''}` },
-    h('div', { class: 'tile-label' }, label),
-    h('div', { class: 'tile-value' }, value),
-    h('div', { class: 'tile-note' }, note));
+function stat(label, value, note) {
+  return h('div', { class: `stat ${value === '–' ? 'stat-empty' : ''}` },
+    h('div', { class: 'stat-label' }, label),
+    h('div', { class: 'stat-value' }, value),
+    h('div', { class: 'stat-note' }, note));
 }
 
 export const shortCourse = (name = '') => name.replace(/\s+(?:Golf\s*(?:&|and)\s*Country\s+Club|Golf\s+Club|Golf\s+Course|Country\s+Club|G\.?C\.?)$/i, '');
