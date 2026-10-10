@@ -142,6 +142,26 @@ export function calendarUrl({ title, date, time, location = '', details = '', mi
   return `https://calendar.google.com/calendar/render?${params}`;
 }
 
+/** An Outlook.com "new event" link. */
+export function outlookCalendarUrl({ title, date, time, location = '', details = '', minutes = 270 }) {
+  const [y, m, d] = date.split('-').map(Number);
+  const p = (n) => String(n).padStart(2, '0');
+  const local = (x) => `${x.getFullYear()}-${p(x.getMonth() + 1)}-${p(x.getDate())}T${p(x.getHours())}:${p(x.getMinutes())}:00`;
+  const params = new URLSearchParams({ path: '/calendar/action/compose', rru: 'addevent', subject: title });
+  if (time) {
+    const [hh, mm] = time.split(':').map(Number);
+    params.set('startdt', local(new Date(y, m - 1, d, hh, mm)));
+    params.set('enddt', local(new Date(y, m - 1, d, hh, mm + minutes)));
+  } else {
+    params.set('startdt', date);
+    params.set('enddt', date);
+    params.set('allday', 'true');
+  }
+  if (location) params.set('location', location);
+  if (details) params.set('body', details);
+  return `https://outlook.live.com/calendar/0/deeplink/compose?${params}`;
+}
+
 export function scoreToPar(r) {
   if (!r.score || !r.par) return null;
   const diff = r.score - r.par;

@@ -611,5 +611,6 @@ export function parseEmail(msg, { dayFirst = true, extraTerms = [] } = {}) {
     snippet: decodeEntities(msg.snippet || body.slice(0, 200)).replace(/\s+/g, ' ').trim().slice(0, 240),
     category,
     details,
+    ...(msg.link ? { link: msg.link } : {}),
   };
 }

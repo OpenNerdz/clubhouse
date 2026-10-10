@@ -1,10 +1,10 @@
 // Lets Clubhouse open without a signal (handy for entering a score on the course).
 // Always tries the network first so updates show up straight away.
-const CACHE = 'clubhouse-v1';
+const CACHE = 'clubhouse-v2';
 const SHELL = [
   './', 'index.html', 'css/styles.css', 'manifest.webmanifest', 'icons/icon.svg',
   'js/theme-init.js', 'js/app.js', 'js/config.js', 'js/store.js', 'js/google.js', 'js/parser.js',
-  'js/golf.js', 'js/ui.js', 'js/chart.js', 'js/demo.js',
+  'js/golf.js', 'js/ui.js', 'js/chart.js', 'js/demo.js', 'js/microsoft.js', 'js/util.js',
   'js/views/common.js', 'js/views/home.js', 'js/views/mail.js', 'js/views/scores.js',
   'js/views/settings.js', 'js/views/sheets.js', 'js/views/welcome.js',
 ];

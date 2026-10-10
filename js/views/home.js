@@ -23,7 +23,7 @@ export function homeView(ctx) {
       action: h('button', { class: 'btn btn-small', type: 'button', onclick: () => teeTimeSheet(ctx) }, icon('plus', 16), h('span', null, 'Add tee time')),
     }, items.length
       ? h('ul', { class: 'list' }, items.slice(0, 6).map((it) => upcomingRow(ctx, it)))
-      : empty(ctx.connected ? 'Nothing booked yet. Tee times and competitions from your email will appear here.' : 'Nothing booked yet. Add a tee time, or connect Gmail to pick them up automatically.')));
+      : empty(ctx.connected ? 'Nothing booked yet. Tee times and competitions from your email will appear here.' : 'Nothing booked yet. Add a tee time, or connect your email to pick them up automatically.')));
   }
 
   if (show.mail && (ctx.connected || ctx.demo)) {

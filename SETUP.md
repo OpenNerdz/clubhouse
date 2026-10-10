@@ -1,13 +1,12 @@
 # Setting up Clubhouse
 
-You can try Clubhouse straight away with sample data: open it and choose **Look around with sample data**. Reading real Gmail needs a one-time setup, which takes about 20 minutes:
+You can try Clubhouse straight away with sample data: open it and choose **Look around with sample data**. Reading real email needs a one-time setup for each kind of account he might use:
 
 1. Put the site online, so it has a web address.
-2. Create a free Google Cloud project and turn on Gmail access.
-3. Allow your stepdad's Gmail address to sign in.
-4. Create a Client ID and paste it into `js/config.js`.
+2. **Gmail** (steps 2 to 4): create a free Google Cloud project, allow his address and get a Google Client ID.
+3. **Outlook, Hotmail or Live** (step 5): register the app with Microsoft and get a Microsoft Client ID.
 
-You only do this once. It costs nothing.
+You only need the part for the email he uses. It costs nothing.
 
 ---
 
@@ -108,6 +107,40 @@ Google can take a few minutes to recognise a new origin. If sign-in says `origin
 
 ---
 
+## Step 5: Outlook, Hotmail and Live addresses (Microsoft)
+
+Skip this if he only uses Gmail.
+
+1. Go to **https://entra.microsoft.com** and sign in with any Microsoft account (an Outlook or Hotmail address works).
+   - If it says your account has no directory or tenant, sign up for a free Azure account at https://azure.microsoft.com/free. It may ask for a card to confirm who you are, but registering an app is free. Then come back.
+2. Open **Applications → App registrations → New registration** (or search the top bar for "App registrations").
+3. Fill in:
+   - **Name:** `Clubhouse`
+   - **Supported account types:** **Accounts in any organizational directory and personal Microsoft accounts**. This covers Outlook.com, Hotmail and Live addresses as well as work accounts.
+   - **Redirect URI:** choose the platform **Single-page application (SPA)** (not "Web") and enter your site address **with** the path and the slash on the end, e.g. `https://your-name.github.io/clubhouse/`
+4. Click **Register**. On the **Overview** page, copy the **Application (client) ID**. It looks like `1a2b3c4d-1234-5678-9abc-1234567890ab`.
+5. Optional, for testing on this phone: go to **Authentication**, and under **Single-page application** add `http://localhost:8080/`. Save.
+6. Optional but tidy: go to **API permissions → Add a permission → Microsoft Graph → Delegated permissions**, add **Mail.Read** and **Files.ReadWrite.AppFolder**, and save. He's asked for these at sign-in anyway.
+7. Paste the ID into `js/config.js`:
+
+   ```js
+   export const MICROSOFT_CLIENT_ID = '1a2b3c4d-1234-5678-9abc-1234567890ab';
+   ```
+
+   Then upload the site again.
+
+No client secret is needed; leave **Certificates & secrets** alone.
+
+When he signs in, Microsoft lists what Clubhouse is asking for:
+- **Read your mail:** read-only.
+- **Have full access to the application's folder:** only the `Apps/Clubhouse` folder in his OneDrive, used for the backup.
+- **Maintain access to data you have given it access to:** keeps him signed in for the day.
+- **View your basic profile.**
+
+Microsoft marks the app as from an "unverified" publisher, which is normal for a private app. Work or school accounts may need the organisation's IT team to allow it; personal accounts don't.
+
+---
+
 ## First sign-in (on his phone or computer)
 
 **On a phone or iPad, add it to the home screen first**, then open it from the new icon and sign in there. On iPhones the home-screen app keeps its own storage, separate from Safari, so this way everything ends up in the right place.
@@ -117,11 +150,11 @@ Google can take a few minutes to recognise a new origin. If sign-in says `origin
 
 Then:
 
-1. Press **Continue with Google** and choose his Google account.
-2. Google shows **"Google hasn't verified this app"**. That's expected for a private app. Click **Continue**.
-3. Tick **both** boxes:
+1. Press **Continue with Google** (for Gmail) or **Continue with Microsoft** (for Outlook, Hotmail or Live) and choose his account.
+2. **Google** shows **"Google hasn't verified this app"**. That's expected for a private app. Click **Continue**, then tick **both** boxes:
    - *Read your email*: needed to find golf emails. It's read-only, so the app can't send, change or delete anything.
    - *See, create and delete its own configuration data in your Google Drive*: the backup. It only covers a hidden folder for this app and can't see his other files.
+3. **Microsoft** lists the permissions from step 5. Click **Accept**.
 4. Clubhouse searches the last 6 months of email for golf. The first check takes about a minute. With a very busy inbox it reads 500 emails at a time and asks him to press **Check email** again to carry on.
 
 > **iPhone:** if the Google window opens from the home-screen icon but doesn't come back to Clubhouse afterwards, use Clubhouse in Safari instead. Turn on **Back up to Google Drive** so the data is the same in both places.
@@ -130,7 +163,7 @@ Then:
 
 ## Using it
 
-- **Check email** (top right) looks for new golf emails. It doesn't run in the background, so press it whenever he wants an update. If his sign-in has expired after an hour or so, a Google window appears briefly.
+- **Check email** (top right) looks for new golf emails. It doesn't run in the background, so press it whenever he wants an update. If his sign-in has expired, a Google window appears briefly, or with Outlook the page goes to Microsoft and straight back.
 - **Coming up** lists booked tee times and competitions, in date order. Cancelled bookings are taken off automatically. Tap one to add it to Google Calendar.
 - **Golf mail** has every golf email, sorted into tee times, competitions, handicap, club news, shop & offers and other. Tap an email to see the details Clubhouse found. From there he can:
   - move it to a different category (**Show under**)
@@ -148,11 +181,14 @@ If some golf emails are missed, add a word they always contain in **Settings →
 ## Privacy and security
 
 - **No server.** Clubhouse runs entirely in his browser. It talks only to Google.
-- **Read-only.** The Gmail permission is `gmail.readonly`. The sign-in token stays in memory, lasts about an hour and is never saved.
+- **Read-only.** The permissions are Gmail `gmail.readonly` and Outlook `Mail.Read`.
+- **Sign-in tokens aren't kept.** They stay in memory and last about an hour. With Outlook, a renewal token stays in that browser tab for the day so a reload doesn't need another sign-in.
 - **Only what it needs is kept.** Clubhouse saves the golf details it finds and a short preview of each golf email. Non-golf email is never kept.
 - **Safe display.** Email content is always shown as plain text, never as web code. The page's security policy blocks it from contacting anything except Google.
-- **His backup stays his.** The optional backup lives in a private app folder in his own Google Drive.
-- **Taking it back.** **Settings → Disconnect** removes Clubhouse's access from his Google account. He can also remove it at https://myaccount.google.com/connections.
+- **His backup stays his.** The optional backup lives in a private app folder in his own Google Drive or OneDrive.
+- **Taking it back.**
+  - **Google:** **Settings → Disconnect** removes Clubhouse's access from his account. He can also remove it at https://myaccount.google.com/connections.
+  - **Microsoft:** apps can't remove their own access, so **Disconnect** signs out on the device and then links to https://account.live.com/consent/Manage, where he removes Clubhouse.
 
 ## Troubleshooting
 
@@ -164,3 +200,6 @@ If some golf emails are missed, add a word they always contain in **Settings →
 | "The Gmail or Drive API isn't switched on" | Enable both APIs in step 2. |
 | The sign-in window doesn't appear | Allow pop-ups for the site in the browser's settings. |
 | An email is in the wrong place | Open it and change **Show under**. |
+| Microsoft: `AADSTS50011` (redirect URI mismatch) | Add the site's exact address, with the slash on the end, under **Authentication → Single-page application**. |
+| Microsoft: `AADSTS9002326` / "Cross-origin token redemption" | The address was added under **Web** instead of **Single-page application**. Move it to SPA. |
+| Microsoft: `AADSTS700016` (application not found) | The Microsoft Client ID is wrong, or **Supported account types** doesn't include personal accounts. |

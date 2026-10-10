@@ -3,19 +3,23 @@
 // memory for up to an hour and is never stored or sent anywhere except Google.
 
 import { CLIENT_ID } from './config.js';
+import { buildQuery } from './parser.js';
+import { AuthError, sleep } from './util.js';
+
+export const info = {
+  id: 'google',
+  name: 'Google',
+  mail: 'Gmail',
+  drive: 'Google Drive',
+  concurrency: 6,
+  accessUrl: 'https://myaccount.google.com/connections',
+};
 
 export const SCOPES = {
   base: 'openid email profile',
   gmail: 'https://www.googleapis.com/auth/gmail.readonly',
   drive: 'https://www.googleapis.com/auth/drive.appdata',
 };
-
-export class AuthError extends Error {
-  constructor(message, { silent = false } = {}) {
-    super(message);
-    this.silent = silent; // nothing for the user to see, e.g. a sign-in that was simply restarted
-  }
-}
 
 let gisPromise = null;
 let client = null;
@@ -127,8 +131,6 @@ export function signOut() {
   });
 }
 
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-
 async function api(url, { method = 'GET', headers = {}, body } = {}, attempt = 0) {
   if (!hasToken()) throw new AuthError('Please sign in to Google again.');
   let res;
@@ -168,11 +170,15 @@ async function api(url, { method = 'GET', headers = {}, body } = {}, attempt = 0
 
 export async function getProfile() {
   const p = await api('https://www.googleapis.com/oauth2/v3/userinfo');
-  return { name: p.given_name || p.name || '', fullName: p.name || '', email: p.email || '', picture: p.picture || '' };
+  return { provider: 'google', name: p.given_name || p.name || '', fullName: p.name || '', email: p.email || '', picture: p.picture || '' };
 }
 
-/** Newest first. `more` is true when Gmail had further matches beyond `max`. */
-export async function listMessageIds(q, max = 1500) {
+/** Gmail IDs of possible golf emails, newest first. `more` is true when there were further matches beyond `max`. */
+export function searchMessages({ months, extraTerms, after, max = 1500 }) {
+  return listMessageIds(buildQuery({ months, extraTerms, after }), max);
+}
+
+async function listMessageIds(q, max) {
   const ids = [];
   let pageToken = '';
   do {
@@ -227,41 +233,32 @@ export async function getMessage(id) {
   };
 }
 
-/** Runs fn over items, a few at a time, to stay within Gmail's rate limits. */
-export async function mapLimit(items, limit, fn) {
-  const results = new Array(items.length);
-  let next = 0;
-  const worker = async () => {
-    while (next < items.length) {
-      const i = next++;
-      try {
-        results[i] = await fn(items[i], i);
-      } catch (err) {
-        if (err instanceof AuthError) throw err;
-        results[i] = null;
-      }
-    }
-  };
-  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
-  return results;
-}
-
 /* ---------- Drive backup (a private app folder only Clubhouse can see) ---------- */
 
 const BACKUP_NAME = 'clubhouse-backup.json';
 
-export async function findBackup() {
+async function findBackup() {
   // Oldest first, so every device settles on the same file.
   const params = new URLSearchParams({ spaces: 'appDataFolder', q: `name='${BACKUP_NAME}' and trashed=false`, fields: 'files(id,modifiedTime)', orderBy: 'createdTime', pageSize: '10' });
   const res = await api(`https://www.googleapis.com/drive/v3/files?${params}`);
-  return (res.files || [])[0] || null;
+  return ((res.files || [])[0] || {}).id || null;
 }
 
-export function readBackup(id) {
-  return api(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(id)}?alt=media`);
+/** The backup, if there is one: { id, data }. `knownId` skips the search. */
+export async function loadBackup(knownId) {
+  let id = knownId || (await findBackup());
+  if (!id) return { id: null, data: null };
+  try {
+    return { id, data: await api(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(id)}?alt=media`) };
+  } catch (err) {
+    if (err.status !== 404 || !knownId) throw err;
+    id = await findBackup(); // the remembered file has gone; look again
+    return id ? { id, data: await api(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(id)}?alt=media`) } : { id: null, data: null };
+  }
 }
 
-export async function writeBackup(id, data) {
+/** Creates or replaces the backup file; returns its id. */
+export async function saveBackup(id, data) {
   const json = JSON.stringify(data);
   if (id) {
     await api(`https://www.googleapis.com/upload/drive/v3/files/${encodeURIComponent(id)}?uploadType=media`, {
@@ -289,4 +286,9 @@ export async function writeBackup(id, data) {
     body,
   });
   return res.id;
+}
+
+/** A link that opens the email in Gmail. */
+export function messageLink(email, accountEmail) {
+  return `https://mail.google.com/mail/${accountEmail ? `?authuser=${encodeURIComponent(accountEmail)}` : 'u/0/'}#all/${email.threadId}`;
 }

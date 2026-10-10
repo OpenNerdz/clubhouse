@@ -777,6 +777,10 @@ input[type="search"]::-webkit-search-cancel-button { -webkit-appearance: none; a
   .connect-compact .connect-action { grid-column: 1 / -1; align-items: flex-start; margin-top: 8px; }
 }
 .setup-note { color: var(--text-3); font-size: 0.82rem; }
+.signin-buttons { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.signin-buttons .setup-note { flex-basis: 100%; }
+.welcome-actions .signin-buttons { flex-direction: column; align-items: stretch; }
+.welcome-actions .signin-buttons .setup-note { text-align: center; }
 
 /* ---------- averages & chart ---------- */
 

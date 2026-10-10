@@ -1,5 +1,5 @@
 // Pieces shared by several screens.
-import { h, icon, googleLogo, formatDay, formatTime, formatEmailDate, formatFullDate, whenLabel, weekdayShort, monthShort, fromIso } from '../ui.js';
+import { h, icon, googleLogo, microsoftLogo, formatDay, formatTime, formatEmailDate, formatFullDate, whenLabel, weekdayShort, monthShort, fromIso } from '../ui.js';
 import { CATEGORIES } from '../parser.js';
 import { latestHandicapEmail, formatIndex, scoreToPar } from '../golf.js';
 import { emailSheet, roundSheet, upcomingSheet } from './sheets.js';
@@ -162,14 +162,23 @@ export function connectCard(ctx, { compact = false } = {}) {
   return h('section', { class: `card connect ${compact ? 'connect-compact' : ''}` },
     h('div', { class: 'connect-icon' }, icon('mail', 22)),
     h('div', { class: 'connect-text' },
-      h('h2', null, 'Connect your Gmail'),
-      h('p', null, 'Clubhouse will find tee times, competitions, handicap updates and club news in your email. It only reads; it can’t send or delete anything.')),
-    h('div', { class: 'connect-action' },
-      googleButton(ctx),
-      ctx.configured ? null : h('p', { class: 'setup-note' }, 'Google sign-in needs a one-time setup. See SETUP.md.')));
+      h('h2', null, 'Connect your email'),
+      h('p', null, 'Clubhouse will find tee times, competitions, handicap updates and club news in your Gmail or Outlook. It only reads; it can’t send or delete anything.')),
+    h('div', { class: 'connect-action' }, signInButtons(ctx, 'Connect')));
 }
 
-export function googleButton(ctx, label = 'Connect with Google') {
-  return h('button', { class: 'btn btn-google', type: 'button', onclick: ctx.actions.connect, disabled: !ctx.configured || !!ctx.busy },
-    googleLogo(18), h('span', null, ctx.busy ? ctx.busy : label));
+/** "Continue with Google" and "Continue with Microsoft", with a note for any not set up yet. */
+export function signInButtons(ctx, verb = 'Continue') {
+  const button = (id, logo, name) => h('button', {
+    class: 'btn btn-google',
+    type: 'button',
+    onclick: () => ctx.actions.connect(id),
+    disabled: !ctx.configuredFor(id) || !!ctx.busy,
+  }, logo, h('span', null, `${verb} with ${name}`));
+  const missing = [['google', 'Gmail'], ['microsoft', 'Outlook']].filter(([id]) => !ctx.configuredFor(id)).map(([, n]) => n);
+  return h('div', { class: 'signin-buttons' },
+    button('google', googleLogo(18), 'Google'),
+    button('microsoft', microsoftLogo(17), 'Microsoft'),
+    ctx.busy ? h('p', { class: 'setup-note', role: 'status' }, ctx.busy) : null,
+    missing.length ? h('p', { class: 'setup-note' }, `${missing.join(' and ')} sign-in needs a one-time setup first. See SETUP.md.`) : null);
 }

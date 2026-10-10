@@ -9,7 +9,7 @@ function group(title, hint, ...children) {
 
 function accountGroup(ctx) {
   if (ctx.demo) {
-    return group('Google account', null,
+    return group('Email account', null,
       h('p', { class: 'setting-text' }, 'You’re looking at sample data. Nothing here is saved.'),
       h('div', { class: 'setting-block' }, h('button', { class: 'btn', type: 'button', onclick: ctx.actions.exitDemo }, 'Leave demo')));
   }
@@ -18,7 +18,7 @@ function accountGroup(ctx) {
   const p = ctx.state.meta.profile;
   const s = ctx.settings;
   const lastBackup = ctx.state.meta.lastBackup;
-  return group('Google account', null,
+  return group(`${ctx.provider.mail} account`, null,
     h('div', { class: 'account' },
       p.picture ? h('img', { class: 'avatar', src: p.picture, alt: '', width: 44, height: 44, referrerpolicy: 'no-referrer' }) : h('span', { class: 'avatar avatar-blank' }, icon('mail', 20)),
       h('div', { class: 'account-text' },
@@ -29,8 +29,8 @@ function accountGroup(ctx) {
     h('div', { class: 'divider' }),
     switchRow({
       id: 'set-drive',
-      label: 'Back up to Google Drive',
-      hint: 'Keeps your scores safe and in step across your phone, tablet and computer. Saved in a private app folder in your Drive.',
+      label: `Back up to ${ctx.provider.drive}`,
+      hint: `Keeps your scores safe and in step across your phone, tablet and computer. Saved in a private app folder in your ${ctx.provider.drive}.`,
       checked: s.driveBackup,
       onChange: (v) => ctx.actions.setSetting('driveBackup', v),
     }),
@@ -133,5 +133,5 @@ export function settingsView(ctx) {
       h('button', { class: 'btn btn-ghost-danger', type: 'button', onclick: ctx.actions.deleteAll }, icon('trash', 18), h('span', null, 'Delete everything from this device'))),
 
     h('p', { class: 'footnote' }, icon('shield', 16), h('span', null,
-      'Privacy: Clubhouse runs entirely in your browser. Your email is read directly from Google on this device and only the golf details it finds are kept. Nothing is sent to any other server.')));
+      'Privacy: Clubhouse runs entirely in your browser. Your email is read directly from Google or Microsoft on this device and only the golf details it finds are kept. Nothing is sent to any other server.')));
 }

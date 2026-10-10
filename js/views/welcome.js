@@ -1,5 +1,5 @@
 import { h, icon } from '../ui.js';
-import { googleButton } from './common.js';
+import { signInButtons } from './common.js';
 
 export function welcomeView(ctx) {
   const point = (iconName, title, text) => h('li', null,
@@ -10,14 +10,13 @@ export function welcomeView(ctx) {
     h('div', { class: 'welcome-card' },
       h('div', { class: 'welcome-brand' }, h('img', { src: 'icons/icon.svg', alt: '', width: 40, height: 40 }), h('span', null, 'Clubhouse')),
       h('h1', null, 'Your golf, all in one place'),
-      h('p', { class: 'welcome-lead' }, 'Clubhouse reads your Gmail for golf and keeps your scores alongside it.'),
+      h('p', { class: 'welcome-lead' }, 'Clubhouse reads your Gmail or Outlook for golf and keeps your scores alongside it.'),
       h('ul', { class: 'welcome-points' },
         point('flag', 'Tee times and competitions', 'Picked out of booking emails and listed by date.'),
         point('gauge', 'Handicap and results', 'Your latest index and how you did, at a glance.'),
         point('scores', 'Your scores', 'Record rounds and watch your game improve.')),
       h('div', { class: 'welcome-actions' },
-        googleButton(ctx, 'Continue with Google'),
-        ctx.configured ? null : h('p', { class: 'setup-note' }, 'Google sign-in needs a one-time setup first. See SETUP.md.'),
+        signInButtons(ctx),
         h('button', { class: 'btn btn-wide', type: 'button', onclick: ctx.actions.startDemo }, 'Look around with sample data'),
         h('button', { class: 'link-btn', type: 'button', onclick: ctx.actions.finishOnboarding }, 'Skip, I only want to track scores')),
       h('p', { class: 'welcome-privacy' }, icon('shield', 16),

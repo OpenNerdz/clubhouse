@@ -1,7 +1,7 @@
 // Pop-up sheets: forms for rounds and tee times, and detail views.
 import { h, add, icon, openDialog, confirmDialog, today, formatLongDay, formatTime, formatFullDate, formatEmailDate, segmented } from '../ui.js';
 import { CATEGORIES } from '../parser.js';
-import { calendarUrl, differential, formatIndex } from '../golf.js';
+import { calendarUrl, outlookCalendarUrl, differential, formatIndex } from '../golf.js';
 import { categoryBadge, ordinal } from './common.js';
 
 let fieldCount = 0;
@@ -170,10 +170,11 @@ function facts(rows) {
   return h('dl', { class: 'facts' }, items.map(([k, v]) => h('div', { class: 'fact' }, h('dt', null, k), h('dd', null, v))));
 }
 
-const gmailLink = (ctx, e) => {
-  const who = ctx.state.meta.profile && ctx.state.meta.profile.email;
-  return `https://mail.google.com/mail/${who ? `?authuser=${encodeURIComponent(who)}` : 'u/0/'}#all/${e.threadId}`;
-};
+/** Google Calendar for Gmail users, Outlook's calendar for Outlook users. */
+function calendarLink(ctx, event) {
+  const outlook = ctx.provider.id === 'microsoft' && !ctx.demo;
+  return { href: outlook ? outlookCalendarUrl(event) : calendarUrl(event), label: outlook ? 'Add to Outlook calendar' : 'Add to Google Calendar' };
+}
 
 function whenText(d) {
   if (!d.date) return '';
@@ -226,11 +227,11 @@ export function emailSheet(ctx, id) {
           facts(rows),
           e.snippet ? h('blockquote', { class: 'snippet' }, e.snippet) : null,
           h('div', { class: 'sheet-actions' },
-            ctx.demo ? null : h('a', { class: 'btn', href: gmailLink(ctx, e), target: '_blank', rel: 'noopener noreferrer' }, icon('external', 18), h('span', null, 'Open in Gmail')),
-            canCalendar ? h('a', {
-              class: 'btn', target: '_blank', rel: 'noopener noreferrer',
-              href: calendarUrl({ title: e.category === 'teetime' ? `Golf: ${d.course || 'tee time'}` : e.subject, date: d.date, time: d.time, location: d.course || '', details: d.ref ? `Booking ref ${d.ref}` : '' }),
-            }, icon('calendar', 18), h('span', null, 'Add to calendar')) : null,
+            ctx.demo ? null : h('a', { class: 'btn', href: ctx.messageLink(e), target: '_blank', rel: 'noopener noreferrer' }, icon('external', 18), h('span', null, `Open in ${ctx.provider.mail}`)),
+            canCalendar ? (() => {
+              const cal = calendarLink(ctx, { title: e.category === 'teetime' ? `Golf: ${d.course || 'tee time'}` : e.subject, date: d.date, time: d.time, location: d.course || '', details: d.ref ? `Booking ref ${d.ref}` : '' });
+              return h('a', { class: 'btn', target: '_blank', rel: 'noopener noreferrer', href: cal.href }, icon('calendar', 18), h('span', null, 'Add to calendar'));
+            })() : null,
             canScore ? h('button', {
               class: 'btn', type: 'button',
               onclick: () => { close(); roundSheet(ctx, { prefill: { date: d.date, course: d.course || '' } }); },
@@ -262,10 +263,10 @@ export function upcomingSheet(ctx, item) {
           ['Notes', item.notes],
         ]),
         h('div', { class: 'sheet-actions' },
-          h('a', {
-            class: 'btn btn-primary', target: '_blank', rel: 'noopener noreferrer',
-            href: calendarUrl({ title: item.type === 'event' ? item.title : `Golf: ${item.title}`, date: item.date, time: item.time, location: item.course || '', details: item.ref ? `Booking ref ${item.ref}` : item.notes || '' }),
-          }, icon('calendar', 18), h('span', null, 'Add to Google Calendar')),
+          (() => {
+            const cal = calendarLink(ctx, { title: item.type === 'event' ? item.title : `Golf: ${item.title}`, date: item.date, time: item.time, location: item.course || '', details: item.ref ? `Booking ref ${item.ref}` : item.notes || '' });
+            return h('a', { class: 'btn btn-primary', target: '_blank', rel: 'noopener noreferrer', href: cal.href }, icon('calendar', 18), h('span', null, cal.label));
+          })(),
           item.emailId ? h('button', { class: 'btn', type: 'button', onclick: () => { close(); emailSheet(ctx, item.emailId); } }, icon('mail', 18), h('span', null, 'View email')) : null,
           item.manual ? h('button', { class: 'btn', type: 'button', onclick: () => { close(); teeTimeSheet(ctx, ctx.state.teeTimes[item.id]); } }, icon('edit', 18), h('span', null, 'Edit')) : null),
       ],

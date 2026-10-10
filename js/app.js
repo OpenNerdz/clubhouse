@@ -1,6 +1,8 @@
 import * as store from './store.js';
 import * as google from './google.js';
-import { parseEmail, buildQuery } from './parser.js';
+import * as microsoft from './microsoft.js';
+import { mapLimit } from './util.js';
+import { parseEmail } from './parser.js';
 import { upcomingItems, roundStats } from './golf.js';
 import { h, icon, toast, openDialog, confirmDialog, download, today, isoLocal } from './ui.js';
 import { buildDemoState } from './demo.js';
@@ -75,30 +77,42 @@ function report(err) {
 }
 
 // Bumped whenever the data is reset (disconnect, delete, demo) so that a slow
-// Google request started earlier can't write old data back afterwards.
+// request started earlier can't write old data back afterwards.
 const stale = (session) => session !== app.session || !app.state.meta.profile;
 
-/* ---------- Gmail ---------- */
+/* ---------- email account (Google or Microsoft) ---------- */
 
-/** Signs in if needed and checks it's still his account (the Google window lets you pick any). */
-async function ensureSignedIn() {
-  const had = google.hasToken();
+const PROVIDERS = { google, microsoft };
+/** The connected account's provider. Accounts saved before Outlook support are Google. */
+const provider = () => PROVIDERS[(app.state.meta.profile && app.state.meta.profile.provider) || 'google'];
+const notSetUp = (p) => `${p.info.name} sign-in isn’t set up yet. See SETUP.md.`;
+
+/** After a fresh sign-in, checks it's still his account (the sign-in page lets you pick any). */
+async function checkAccount(p) {
   const expected = app.state.meta.profile && app.state.meta.profile.email;
-  await google.signIn({ hint: expected });
-  if (had || !expected) return;
-  const p = await google.getProfile();
-  if (p.email.toLowerCase() !== expected.toLowerCase()) {
-    google.clearToken();
-    throw new Error(`That was ${p.email}. Please choose ${expected}, or disconnect in Settings to switch accounts.`);
+  if (!expected) return;
+  const got = await p.getProfile();
+  if (got.email.toLowerCase() !== expected.toLowerCase()) {
+    p.clearToken();
+    throw new Error(`That was ${got.email}. Please choose ${expected}, or disconnect in Settings to switch accounts.`);
   }
 }
 
+/** Signs in if needed. With Microsoft the page may go to the sign-in page and carry on with `resume` when it returns. */
+async function ensureSignedIn(resume = 'check') {
+  const p = provider();
+  if (p.hasToken()) return;
+  await p.signIn({ hint: app.state.meta.profile && app.state.meta.profile.email, resume });
+  await checkAccount(p);
+}
+
 async function checkEmail() {
-  if (app.demo) return toast('This is sample data. Connect Gmail to check real email.');
-  if (!google.isConfigured()) return toast('Google sign-in isn’t set up yet. See SETUP.md.', { tone: 'error' });
+  if (app.demo) return toast('This is sample data. Connect your email to check real messages.');
+  const p = provider();
+  if (!p.isConfigured()) return toast(notSetUp(p), { tone: 'error' });
   if (app.busy) return;
   try {
-    await ensureSignedIn();
+    await ensureSignedIn('check');
     await scan();
     await backup();
   } catch (err) {
@@ -111,20 +125,20 @@ const MAX_READ = 500; // emails read per check; the rest are picked up by the ne
 async function scan({ quiet = false } = {}) {
   const session = app.session;
   const startedAt = Date.now();
-  setBusy('Searching Gmail…');
+  const p = provider();
+  setBusy(`Searching ${p.info.mail}…`);
   try {
     const s = app.state.settings;
     const since = app.state.meta.lastScan ? app.state.meta.lastScan - 3 * DAY : 0;
-    const q = buildQuery({ months: s.months, extraTerms: s.extraTerms, after: since || undefined });
-    const { ids } = await google.listMessageIds(q);
+    const { ids } = await p.searchMessages({ months: s.months, extraTerms: s.extraTerms, after: since || undefined });
     if (stale(session)) return;
     const skipped = new Set(app.state.meta.skipped);
     const unread = ids.filter((id) => !app.state.emails[id] && !skipped.has(id));
     const batch = unread.slice(0, MAX_READ);
     let done = 0;
     if (batch.length) setBusy(`Reading 0 of ${batch.length}`);
-    const results = await google.mapLimit(batch, 6, async (id) => {
-      const msg = await google.getMessage(id);
+    const results = await mapLimit(batch, p.info.concurrency, async (id) => {
+      const msg = await p.getMessage(id);
       done += 1;
       setBusy(`Reading ${done} of ${batch.length}`);
       return parseEmail(msg, { dayFirst, extraTerms: s.extraTerms }) || { id, skip: true };
@@ -154,20 +168,49 @@ async function scan({ quiet = false } = {}) {
   }
 }
 
-async function connect() {
-  if (!google.isConfigured()) return toast('Google sign-in isn’t set up yet. See SETUP.md.', { tone: 'error' });
+async function connect(id = 'google') {
+  const p = PROVIDERS[id];
+  if (!p.isConfigured()) return toast(notSetUp(p), { tone: 'error' });
   try {
-    await google.signIn({});
-    const session = app.session;
-    setBusy('Connecting…');
-    const profile = await google.getProfile();
-    if (session !== app.session) return setBusy(null);
-    mutate((st) => {
-      st.meta.profile = profile;
-      st.meta.onboarded = true;
-    }, { backup: false });
-    navigate('home');
-    await backup(); // a backup from another device comes in first, so emails aren't read twice
+    await p.signIn({ resume: 'connect' });
+    await finishConnect(p);
+  } catch (err) {
+    report(err);
+  }
+}
+
+async function finishConnect(p) {
+  const session = app.session;
+  setBusy('Connecting…');
+  const profile = await p.getProfile();
+  if (session !== app.session) return setBusy(null);
+  mutate((st) => {
+    st.meta.profile = profile;
+    st.meta.onboarded = true;
+  }, { backup: false });
+  navigate('home');
+  await backup(); // a backup from another device comes in first, so emails aren't read twice
+  await scan();
+  await backup();
+}
+
+/** Carries on after Microsoft's sign-in page sends him back here. */
+async function resumeAfterRedirect() {
+  const returning = /[#&](?:code|error)=/.test(location.hash);
+  // handleRedirect takes the code out of the address bar before its first pause.
+  const pending = microsoft.handleRedirect();
+  if (returning) setBusy('Signing in…');
+  let result;
+  try {
+    result = await pending;
+  } catch (err) {
+    return report(err);
+  }
+  if (!result) return setBusy(null);
+  try {
+    if (result.resume === 'connect') return await finishConnect(microsoft);
+    await checkAccount(microsoft);
+    if (result.resume === 'backup') return await backup({ interactive: true });
     await scan();
     await backup();
   } catch (err) {
@@ -175,24 +218,25 @@ async function connect() {
   }
 }
 
-function removeAccessDialog() {
+function removeAccessDialog(p) {
   openDialog({
     title: 'One more step',
     className: 'sheet-small',
     build: (close) => ({
       body: h('p', { class: 'dialog-text' },
-        'Clubhouse is disconnected on this device. To remove its access from your Google account too, open Google’s list of connected apps, choose Clubhouse and remove it.'),
+        `Clubhouse is disconnected on this device. To remove its access from your ${p.info.name} account too, open the list of apps you’ve given access to, choose Clubhouse and remove it.`),
       footer: [
         h('button', { class: 'btn', type: 'button', onclick: close }, 'Done'),
-        h('a', { class: 'btn btn-primary', href: 'https://myaccount.google.com/connections', target: '_blank', rel: 'noopener noreferrer', onclick: close }, 'Open Google Account'),
+        h('a', { class: 'btn btn-primary', href: p.info.accessUrl, target: '_blank', rel: 'noopener noreferrer', onclick: close }, `Open ${p.info.name} account`),
       ],
     }),
   });
 }
 
 async function disconnect() {
+  const p = provider();
   const ok = await confirmDialog({
-    title: 'Disconnect Google?',
+    title: `Disconnect ${p.info.name}?`,
     message: 'Clubhouse will stop reading your email and the golf emails it found will be removed from this device. Your scores and tee times stay.',
     confirmLabel: 'Disconnect',
     danger: true,
@@ -200,16 +244,16 @@ async function disconnect() {
   if (!ok) return;
   app.session += 1;
   clearTimeout(app.backupTimer);
-  const revoked = await google.signOut();
+  const revoked = await p.signOut();
   mutate((st) => {
     st.emails = {};
     Object.assign(st.meta, { profile: null, skipped: [], lastScan: 0, driveFileId: null, lastBackup: 0 });
   }, { backup: false });
-  if (revoked) toast('Disconnected. Clubhouse no longer has access to your Google account.');
-  else removeAccessDialog();
+  if (revoked) toast(`Disconnected. Clubhouse no longer has access to your ${p.info.name} account.`);
+  else removeAccessDialog(p);
 }
 
-/* ---------- Drive backup ---------- */
+/* ---------- backup (Google Drive or OneDrive) ---------- */
 
 // One backup at a time, so two can't create duplicate files or overwrite each other.
 let backupQueue = Promise.resolve();
@@ -220,9 +264,10 @@ function backup(opts) {
 }
 
 async function runBackup({ interactive = false } = {}) {
-  if (app.demo || !app.state.settings.driveBackup || !app.state.meta.profile || !google.hasToken()) return;
-  if (!google.canBackup()) {
-    if (interactive) toast('Drive backup wasn’t allowed when you signed in. Disconnect, then connect again and tick the Drive box.', { tone: 'error' });
+  const p = provider();
+  if (app.demo || !app.state.settings.driveBackup || !app.state.meta.profile || !p.hasToken()) return;
+  if (!p.canBackup()) {
+    if (interactive) toast(`${p.info.drive} backup wasn’t allowed when you signed in. Disconnect, then connect again and allow it.`, { tone: 'error' });
     return;
   }
   const session = app.session;
@@ -231,21 +276,10 @@ async function runBackup({ interactive = false } = {}) {
     app.state.meta.lastBackup = Date.now();
     persist();
     render();
-    if (interactive) toast('Backed up to Google Drive.');
+    if (interactive) toast(`Backed up to ${p.info.drive}.`);
   };
   try {
-    let id = app.state.meta.driveFileId;
-    if (!id) id = ((await google.findBackup()) || {}).id || null;
-    if (stale(session)) return;
-    let remote = null;
-    if (id) {
-      try {
-        remote = await google.readBackup(id);
-      } catch (err) {
-        if (err.status !== 404) throw err;
-        id = null;
-      }
-    }
+    const { id, data: remote } = await p.loadBackup(app.state.meta.driveFileId);
     if (stale(session)) return;
     if (remote) {
       const merged = store.merge(app.state, remote);
@@ -256,7 +290,7 @@ async function runBackup({ interactive = false } = {}) {
       }
       if (store.sameData(merged, remote)) return done(id);
     }
-    const newId = await google.writeBackup(id, store.forBackup(app.state));
+    const newId = await p.saveBackup(id, store.forBackup(app.state));
     if (stale(session)) return;
     done(newId);
   } catch (err) {
@@ -266,7 +300,7 @@ async function runBackup({ interactive = false } = {}) {
 
 function scheduleBackup() {
   clearTimeout(app.backupTimer);
-  if (!google.hasToken()) return;
+  if (!provider().hasToken()) return;
   app.backupTimer = setTimeout(() => backup(), 4000);
 }
 
@@ -289,7 +323,7 @@ const actions = {
   disconnect,
   async backupNow() {
     try {
-      if (!google.hasToken()) await ensureSignedIn();
+      await ensureSignedIn('backup');
       await backup({ interactive: true });
     } catch (err) {
       report(err);
@@ -398,7 +432,7 @@ const actions = {
   async deleteAll() {
     const ok = await confirmDialog({
       title: 'Delete everything?',
-      message: 'This removes all scores, tee times, settings and golf emails from this device. Your Gmail is not touched. A Google Drive backup, if you have one, is kept.',
+      message: 'This removes all scores, tee times, settings and golf emails from this device. Your mailbox is not touched. A backup in Google Drive or OneDrive, if you have one, is kept.',
       confirmLabel: 'Delete everything',
       danger: true,
     });
@@ -406,12 +440,13 @@ const actions = {
     app.session += 1;
     clearTimeout(app.backupTimer);
     const wasConnected = !!app.state.meta.profile;
-    const revoked = await google.signOut();
+    const p = provider();
+    const revoked = await p.signOut();
     await store.clearState();
     app.state = store.emptyState();
     navigate('home');
     render();
-    if (wasConnected && !revoked) removeAccessDialog();
+    if (wasConnected && !revoked) removeAccessDialog(p);
     else toast('All Clubhouse data was removed from this device.');
   },
 };
@@ -424,8 +459,10 @@ const ctx = {
   get demo() { return app.demo; },
   get busy() { return app.busy; },
   get connected() { return !!app.state.meta.profile; },
-  get configured() { return google.isConfigured(); },
-  get canBackup() { return google.canBackup(); },
+  get provider() { return provider().info; },
+  get configured() { return google.isConfigured() || microsoft.isConfigured(); },
+  configuredFor: (id) => PROVIDERS[id].isConfigured(),
+  messageLink: (e) => provider().messageLink(e, app.state.meta.profile && app.state.meta.profile.email),
   emails: visibleEmails,
   rounds: () => live(app.state.rounds).sort((a, b) => b.date.localeCompare(a.date)),
   courses: () => live(app.state.courses).sort((a, b) => a.name.localeCompare(b.name)),
@@ -524,9 +561,11 @@ async function start() {
     app.state = await store.loadState();
   }
   applyAppearance();
+  const resuming = resumeAfterRedirect();
   window.addEventListener('hashchange', render);
   render();
   google.prepare();
+  await resuming;
   store.requestPersistence();
   if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
     navigator.serviceWorker.register('sw.js').catch(() => {});

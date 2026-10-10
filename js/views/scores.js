@@ -37,7 +37,7 @@ export function scoresView(ctx) {
         h('p', { class: 'page-sub' }, rounds.length ? `${rounds.length} round${rounds.length === 1 ? '' : 's'} recorded` : 'Keep a record of every round')),
       h('button', { class: 'btn btn-primary', type: 'button', onclick: () => roundSheet(ctx) }, icon('plus', 18), h('span', null, 'Add round'))),
     ctx.backupPending() ? h('div', { class: 'notice', role: 'status' },
-      h('span', null, icon('cloud', 18), 'Your latest changes aren’t backed up to Google Drive yet.'),
+      h('span', null, icon('cloud', 18), `Your latest changes aren’t backed up to ${ctx.provider.drive} yet.`),
       h('button', { class: 'btn btn-small', type: 'button', onclick: ctx.actions.backupNow }, 'Back up now')) : null,
     statTiles(ctx),
     full.length >= 2 ? card({ title: 'Score trend', className: 'card-chart' },
