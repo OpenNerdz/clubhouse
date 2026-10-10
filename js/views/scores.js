@@ -8,10 +8,9 @@ import { partnersCard } from './partners.js';
 /** How his handicap has moved: from his handicap emails, or else the estimate after each round. */
 function handicapCard(ctx) {
   const official = officialIndexHistory(ctx.emails());
-  const estimated = ctx.settings.handicapEstimate ? estimatedIndexHistory(ctx.state.rounds) : [];
-  // Official figures when there are a few of them; until then the estimate tells more of a story.
-  const fromEmail = official.length >= 3 || (official.length === 2 && estimated.length < 2);
-  const points = (fromEmail ? official : estimated).slice(-20);
+  // The official figures whenever there are two, so the chart agrees with the handicap shown above it.
+  const fromEmail = official.length >= 2;
+  const points = (fromEmail ? official : ctx.settings.handicapEstimate ? estimatedIndexHistory(ctx.state.rounds) : []).slice(-20);
   if (points.length < 2) return null;
   return card({ title: 'Handicap', className: 'card-chart' },
     h('p', { class: 'card-sub' }, fromEmail ? 'From your handicap emails · lowest ringed' : 'Estimated after each round · lowest ringed'),
