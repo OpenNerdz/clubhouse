@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { differential, handicapIndex, roundStats, bookingsFromEmails, upcomingItems, calendarUrl, scoreToPar, formatIndex, eventTitle, resultTitle, goodRoundIds } from '../js/golf.js';
+import { differential, handicapIndex, roundStats, bookingsFromEmails, upcomingItems, calendarUrl, scoreToPar, formatIndex, eventTitle, resultTitle, goodRoundIds, unscoredRounds, partnerStats, partnerCounts } from '../js/golf.js';
 
 const round = (date, score, rating = 72, slope = 113, extra = {}) => ({ id: date, date, score, rating, slope, holes: 18, ...extra });
 
@@ -105,4 +105,42 @@ test('formatting', () => {
   assert.equal(formatIndex('+0.4'), '+0.4');
   assert.equal(formatIndex('14.6'), '14.6');
   assert.equal(formatIndex(12), '12.0');
+});
+
+test('played rounds with no score yet are offered for scoring', () => {
+  const now = new Date(2026, 9, 10, 15, 0); // Sat 10 Oct, 3 pm
+  const emails = [
+    mail('1', '2026-10-01', { date: '2026-10-08', time: '08:30', course: 'Oak GC', status: 'confirmed' }),
+    mail('2', '2026-10-01', { date: '2026-10-07', time: '09:00', course: 'Elm GC', status: 'cancelled' }),
+    mail('3', '2026-09-20', { date: '2026-09-25', time: '09:00', course: 'Old GC', status: 'confirmed' }),
+    mail('4', '2026-10-01', { date: '2026-10-10', time: '08:00', course: 'Ash GC', status: 'confirmed' }),
+    mail('5', '2026-10-01', { date: '2026-10-10', time: '13:00', course: 'Late GC', status: 'confirmed' }),
+    { id: '6', category: 'competition', date: 0, subject: 'Entry confirmed: Autumn Stableford', details: { kind: 'entry', date: '2026-10-06' } },
+    { id: '7', category: 'competition', date: 0, subject: 'Winter League: entries now open', details: { kind: 'entry', date: '2026-10-05' } },
+  ];
+  const teeTimes = { t: { id: 't', date: '2026-10-09', course: 'Pine GC' }, gone: { id: 'gone', date: '2026-10-04', deleted: true } };
+  const rounds = { r: { id: 'r', date: '2026-10-09', score: 90 } };
+  const got = unscoredRounds({ emails, teeTimes, rounds }, now);
+  // 10 Oct 8:00 is over by 3 pm, 13:00 isn't; 9 Oct already has a score; 7 Oct was cancelled;
+  // 25 Sep is too long ago; "entries open" doesn't mean he played.
+  assert.deepEqual(got.map((x) => `${x.date} ${x.course || x.event}`), ['2026-10-10 Ash GC', '2026-10-08 Oak GC', '2026-10-06 Autumn Stableford']);
+  const after = unscoredRounds({ emails, teeTimes, rounds, dismissed: ['2026-10-08'] }, now);
+  assert.equal(after.length, 2, 'a day he said he didn’t play is left alone');
+});
+
+test('partner stats: rounds together, average and best', () => {
+  const rounds = {
+    a: { id: 'a', date: '2026-09-01', score: 90, holes: 18, friendIds: ['m', 's'] },
+    b: { id: 'b', date: '2026-09-08', score: 84, holes: 18, friendIds: ['m'] },
+    c: { id: 'c', date: '2026-09-15', score: 41, holes: 9, friendIds: ['m'] },
+    d: { id: 'd', date: '2026-09-22', score: 80, holes: 18, friendIds: ['m'], deleted: true },
+    e: { id: 'e', date: '2026-09-29', score: 88, holes: 18 },
+  };
+  const m = partnerStats(rounds, 'm');
+  assert.equal(m.count, 3);
+  assert.equal(m.average, 87, '9-hole rounds left out of the average');
+  assert.equal(m.best.id, 'b');
+  assert.equal(m.last, '2026-09-15');
+  assert.deepEqual([...partnerCounts(rounds).entries()].sort(), [['m', 3], ['s', 1]]);
+  assert.equal(partnerStats(rounds, 'nobody').count, 0);
 });

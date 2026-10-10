@@ -3,13 +3,14 @@ import { scoreChart } from '../chart.js';
 import { latestHandicapEmail } from '../golf.js';
 import { roundRow, statStrip } from './common.js';
 import { roundSheet } from './sheets.js';
+import { partnersCard } from './partners.js';
 
 export function scoresView(ctx) {
   const rounds = ctx.rounds();
   const stats = ctx.stats();
   const fields = ctx.settings.roundFields;
   const full = rounds.filter((r) => (r.holes || 18) === 18 && r.score).slice(0, 20).reverse();
-  const addRound = () => h('button', { class: 'btn btn-primary', type: 'button', onclick: () => roundSheet(ctx) }, icon('plus', 18), h('span', null, 'Add round'));
+  const addRound = () => h('button', { class: 'btn btn-primary', type: 'button', onclick: () => roundSheet(ctx) }, icon('plus', 18), h('span', null, 'Add score'));
 
   // Averages only for the boxes he fills in.
   const averages = [
@@ -44,7 +45,7 @@ export function scoresView(ctx) {
       h('div', null, h('h1', null, 'Scores'), h('p', { class: 'page-sub' }, sub)),
       rounds.length ? addRound() : null),
     ctx.backupPending() ? h('div', { class: 'notice', role: 'status' },
-      h('span', null, icon('cloud', 18), `Latest changes aren’t backed up to ${ctx.provider.drive} yet.`),
+      h('span', null, icon('cloud', 18), `Your recent changes aren’t backed up to ${ctx.provider.drive} yet.`),
       h('button', { class: 'btn btn-small', type: 'button', onclick: ctx.actions.backupNow }, 'Back up now')) : null,
     rounds.length ? statStrip(ctx) : null,
     full.length >= 2
@@ -53,6 +54,7 @@ export function scoresView(ctx) {
         scoreChart(full, { onCleanup: ctx.onCleanup }),
         averagesRow)
       : averagesRow ? card({}, averagesRow) : null,
+    rounds.length || ctx.friends().length ? partnersCard(ctx) : null,
     rounds.length
       ? byYear.map((g) => card({ title: g.year, className: 'card-scorecard' },
         h('div', { class: 'scorecard-head', 'aria-hidden': 'true' }, h('span', null, 'Date'), h('span', null, 'Course'), h('span', null, 'Points'), h('span', null, 'Score')),

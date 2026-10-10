@@ -2,6 +2,7 @@ import { h, icon, card, switchRow, segmented, toggleChips, timeAgo } from '../ui
 import { CATEGORIES } from '../parser.js';
 import { HOME_SECTIONS, ROUND_FIELDS } from '../store.js';
 import { connectCard } from './common.js';
+import { partnersSheet } from './partners.js';
 
 function group(title, hint, ...children) {
   return card({ title, className: 'settings-group' }, hint ? h('p', { class: 'card-sub' }, hint) : null, ...children);
@@ -104,6 +105,9 @@ export function settingsView(ctx) {
         checked: s.handicapEstimate,
         onChange: (v) => ctx.actions.setSetting('handicapEstimate', v),
       }),
+      h('div', { class: 'setting-line' },
+        h('span', null, h('strong', null, 'Playing partners'), h('span', { class: 'muted' }, ` · ${ctx.friends().length || 'none yet'}`)),
+        h('button', { class: 'btn btn-small', type: 'button', onclick: () => partnersSheet(ctx) }, 'Manage')),
       h('div', { class: 'divider' }),
       h('h3', { class: 'subhead' }, 'Score form'),
       h('p', { class: 'card-sub' }, 'Date, course and score are always there. Add anything else you track.'),
@@ -132,5 +136,6 @@ export function settingsView(ctx) {
       h('button', { class: 'btn btn-ghost-danger', type: 'button', onclick: ctx.actions.deleteAll }, icon('trash', 18), h('span', null, 'Delete everything from this device'))),
 
     h('p', { class: 'footnote' }, icon('shield', 16), h('span', null,
-      'Clubhouse runs in your browser. Email is read straight from Google or Microsoft, and only the golf details are kept, on this device.')));
+      'Clubhouse runs in your browser. Email is read straight from Google or Microsoft, and only the golf details are kept, on this device. ',
+      h('a', { href: 'privacy.html' }, 'Privacy'))));
 }

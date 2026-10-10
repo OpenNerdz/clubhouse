@@ -3,7 +3,7 @@ import * as google from './google.js';
 import * as microsoft from './microsoft.js';
 import { mapLimit } from './util.js';
 import { parseEmail } from './parser.js';
-import { upcomingItems, roundStats, goodRoundIds } from './golf.js';
+import { upcomingItems, unscoredRounds, roundStats, goodRoundIds, partnerCounts } from './golf.js';
 import { h, icon, toast, openDialog, confirmDialog, download, today, isoLocal } from './ui.js';
 import { buildDemoState } from './demo.js';
 import { homeView } from './views/home.js';
@@ -120,9 +120,10 @@ async function checkEmail() {
   }
 }
 
-const MAX_READ = 500; // emails read per check; the rest are picked up by the next press
+const CHUNK = 60; // emails saved at a time, so the screen fills in as it reads and nothing is lost if the app closes
 
-async function scan({ quiet = false } = {}) {
+/** Searches the mailbox and reads any golf emails not seen before. `auto` stays quiet unless something new turns up. */
+async function scan({ auto = false } = {}) {
   const session = app.session;
   const startedAt = Date.now();
   const p = provider();
@@ -130,47 +131,66 @@ async function scan({ quiet = false } = {}) {
   try {
     const s = app.state.settings;
     const since = app.state.meta.lastScan ? app.state.meta.lastScan - 3 * DAY : 0;
-    const { ids } = await p.searchMessages({ months: s.months, extraTerms: s.extraTerms, after: since || undefined });
+    const { ids, more } = await p.searchMessages({ months: s.months, extraTerms: s.extraTerms, after: since || undefined });
     if (stale(session)) return;
     const skipped = new Set(app.state.meta.skipped);
     const unread = ids.filter((id) => !app.state.emails[id] && !skipped.has(id));
-    const batch = unread.slice(0, MAX_READ);
     let done = 0;
-    if (batch.length) setBusy(`Reading 0 of ${batch.length}`);
-    const results = await mapLimit(batch, p.info.concurrency, async (id) => {
-      const msg = await p.getMessage(id);
-      done += 1;
-      setBusy(`Reading ${done} of ${batch.length}`);
-      return parseEmail(msg, { dayFirst, extraTerms: s.extraTerms }) || { id, skip: true };
-    });
-    if (stale(session)) return;
-    // Only move the "checked up to" mark once everything has been read.
-    const complete = !results.some((r) => !r) && unread.length <= MAX_READ;
     let added = 0;
-    mutate((st) => {
-      for (const r of results) {
-        if (!r) continue;
-        if (r.skip) skipped.add(r.id);
-        else {
-          st.emails[r.id] = { ...r, updatedAt: Date.now() };
-          added += 1;
+    let missed = false;
+    if (unread.length) setBusy(`Reading 0 of ${unread.length}`);
+    for (let i = 0; i < unread.length; i += CHUNK) {
+      const results = await mapLimit(unread.slice(i, i + CHUNK), p.info.concurrency, async (id) => {
+        const msg = await p.getMessage(id);
+        done += 1;
+        setBusy(`Reading ${done} of ${unread.length}`);
+        return parseEmail(msg, { dayFirst, extraTerms: s.extraTerms }) || { id, skip: true };
+      });
+      if (stale(session)) return;
+      mutate((st) => {
+        for (const r of results) {
+          if (!r) missed = true;
+          else if (r.skip) skipped.add(r.id);
+          else {
+            st.emails[r.id] = { ...r, updatedAt: Date.now() };
+            added += 1;
+          }
         }
-      }
-      st.meta.skipped = [...skipped].slice(-5000);
-      if (complete) st.meta.lastScan = startedAt;
-    }, { backup: false });
-    if (quiet) return;
+        st.meta.skipped = [...skipped].slice(-5000);
+      }, { backup: false });
+    }
+    // Only move the "checked up to" mark once everything has been read.
+    if (!missed && !more) mutate((st) => { st.meta.lastScan = startedAt; }, { backup: false });
     const found = `Found ${added} new golf email${added === 1 ? '' : 's'}`;
-    if (!complete) toast(`${found}. There’s more to read: press Check email again to carry on.`);
-    else toast(added ? found : 'You’re up to date. No new golf email.');
+    if (more) toast(`${found}. There’s more to read: press Check email again to carry on.`);
+    else if (added) toast(found);
+    else if (!auto) toast(missed ? 'Some emails couldn’t be read. Press Check email to try again.' : 'You’re up to date. No new golf email.');
   } finally {
     setBusy(null);
   }
 }
 
-async function connect(id = 'google') {
+/**
+ * Checks for new golf email by itself when the app is opened or brought back,
+ * but only when that needs no sign-in window, and not more than every 20 minutes.
+ */
+async function autoCheck() {
+  if (app.demo || app.busy || !app.state.meta.profile || document.visibilityState !== 'visible') return;
+  if (Date.now() - (app.state.meta.lastScan || 0) < 20 * 60000) return;
+  const p = provider();
+  if (!p.isConfigured() || !(await p.quietSignIn()) || app.busy) return;
+  try {
+    await scan({ auto: true });
+    await backup();
+  } catch {
+    // Nothing to show: he can always press Check email.
+  }
+}
+
+async function connect(id = 'google', { ready = false } = {}) {
   const p = PROVIDERS[id];
   if (!p.isConfigured()) return toast(notSetUp(p), { tone: 'error' });
+  if (id === 'google' && !ready) return googleHeadsUp();
   try {
     await p.signIn({ resume: 'connect' });
     await finishConnect(p);
@@ -192,6 +212,27 @@ async function finishConnect(p) {
   await backup(); // a backup from another device comes in first, so emails aren't read twice
   await scan();
   await backup();
+}
+
+/** Google's sign-in has two screens that catch people out, so say what's coming first. */
+function googleHeadsUp() {
+  openDialog({
+    title: 'Before you sign in',
+    className: 'sheet-small',
+    build: (close) => ({
+      body: [
+        h('p', { class: 'dialog-text' }, 'Google will open a window. Two things to look out for:'),
+        h('ol', { class: 'steps' },
+          h('li', null, h('strong', null, 'If Google says it hasn’t verified Clubhouse, '), 'choose Continue. That’s normal for a private app.'),
+          h('li', null, h('strong', null, 'Tick every box '), 'when Google lists what Clubhouse can see. It needs them to read your golf email and back up your scores.')),
+      ],
+      footer: [
+        h('button', { class: 'btn', type: 'button', onclick: close }, 'Cancel'),
+        // The Google window has to open straight from this tap, or the browser blocks it.
+        h('button', { class: 'btn btn-primary', type: 'button', onclick: () => { close(); connect('google', { ready: true }); } }, 'Continue to Google'),
+      ],
+    }),
+  });
 }
 
 /** Carries on after Microsoft's sign-in page sends him back here. */
@@ -304,12 +345,16 @@ function scheduleBackup() {
   app.backupTimer = setTimeout(() => backup(), 4000);
 }
 
-/** True when scores, tee times or settings have changed since the last backup. */
+/**
+ * True when scores or tee times changed more than a day ago and still aren't
+ * backed up. Newer changes go up by themselves the next time email is checked.
+ */
 function backupPending() {
   const st = app.state;
   if (app.demo || !st.meta.profile || !st.settings.driveBackup) return false;
   const last = st.meta.lastBackup || 0;
-  return ['rounds', 'teeTimes'].some((k) => Object.values(st[k]).some((x) => (x.updatedAt || 0) > last));
+  const dayAgo = Date.now() - DAY;
+  return ['rounds', 'teeTimes'].some((k) => Object.values(st[k]).some((x) => (x.updatedAt || 0) > last && x.updatedAt < dayAgo));
 }
 
 /* ---------- actions used by the screens ---------- */
@@ -350,8 +395,22 @@ const actions = {
     toast(round.id ? 'Round updated.' : 'Round saved.');
   },
   deleteRound(id) {
+    const before = app.state.rounds[id];
     mutate((st) => { st.rounds[id] = stamp({ id, deleted: true }); });
-    toast('Round deleted.');
+    toast('Round deleted.', { action: { label: 'Undo', run: () => mutate((st) => { st.rounds[id] = stamp(before); }) } });
+  },
+  /** Adds or updates a playing partner and returns their id. */
+  savePartner(friend) {
+    const id = friend.id || store.uid('f');
+    const name = friend.name.trim();
+    mutate((st) => { st.friends[id] = stamp({ ...friend, id, name }); });
+    toast(friend.id ? 'Partner updated.' : `${name} added to your playing partners.`);
+    return id;
+  },
+  deletePartner(id) {
+    const before = app.state.friends[id];
+    mutate((st) => { st.friends[id] = stamp({ id, deleted: true }); });
+    toast(`${before.name} removed.`, { action: { label: 'Undo', run: () => mutate((st) => { st.friends[id] = stamp(before); }) } });
   },
   saveTeeTime(t) {
     const id = t.id || store.uid('t');
@@ -359,14 +418,27 @@ const actions = {
     toast(t.id ? 'Tee time updated.' : 'Tee time added.');
   },
   deleteTeeTime(id) {
+    const before = app.state.teeTimes[id];
     mutate((st) => { st.teeTimes[id] = stamp({ id, deleted: true }); });
-    toast('Tee time removed.');
+    toast('Tee time removed.', { action: { label: 'Undo', run: () => mutate((st) => { st.teeTimes[id] = stamp(before); }) } });
   },
   updateEmail(id, patch) {
     mutate((st) => { if (st.emails[id]) st.emails[id] = stamp({ ...st.emails[id], ...patch }); });
   },
-  hideSender(email) {
+  hideEmail(id) {
+    actions.updateEmail(id, { hidden: true });
+    toast('Email hidden.', { action: { label: 'Undo', run: () => actions.updateEmail(id, { hidden: false }) } });
+  },
+  hideSender(email, name = email) {
     actions.setSetting('hiddenSenders', [...new Set([...app.state.settings.hiddenSenders, email])]);
+    toast(`Emails from ${name} hidden.`, { action: { label: 'Undo', run: () => actions.unhideSender(email) } });
+  },
+  /** He didn't play that day after all, so stop asking for a score. */
+  notPlayed(date) {
+    actions.setSetting('notPlayed', [...app.state.settings.notPlayed, date].slice(-60));
+    toast('We won’t ask about that one again.', {
+      action: { label: 'Undo', run: () => actions.setSetting('notPlayed', app.state.settings.notPlayed.filter((d) => d !== date)) },
+    });
   },
   unhideSender(email) {
     actions.setSetting('hiddenSenders', app.state.settings.hiddenSenders.filter((e) => e !== email));
@@ -466,7 +538,16 @@ const ctx = {
   emails: visibleEmails,
   rounds: () => live(app.state.rounds).sort((a, b) => b.date.localeCompare(a.date)),
   courses: () => live(app.state.courses).sort((a, b) => a.name.localeCompare(b.name)),
+  partnerCounts: () => partnerCounts(app.state.rounds),
+  /** Playing partners, the ones he plays with most first. */
+  friends: () => {
+    const counts = partnerCounts(app.state.rounds);
+    return live(app.state.friends).sort((a, b) => (counts.get(b.id) || 0) - (counts.get(a.id) || 0) || a.name.localeCompare(b.name));
+  },
+  /** The partners on a round or tee time, skipping any since removed. */
+  friendsOf: (item) => (item.friendIds || []).map((id) => app.state.friends[id]).filter((f) => f && !f.deleted),
   upcoming: () => upcomingItems({ emails: visibleEmails(), teeTimes: app.state.teeTimes }, today()),
+  unscored: () => unscoredRounds({ emails: visibleEmails(), teeTimes: app.state.teeTimes, rounds: app.state.rounds, dismissed: app.state.settings.notPlayed }),
   stats: () => roundStats(app.state.rounds),
   goodRounds: () => goodRoundIds(app.state.rounds),
   email: (id) => (app.state.emails[id] ? effective(app.state.emails[id]) : null),
@@ -534,7 +615,7 @@ function render() {
   const root = document.getElementById('app');
   if (!app.state.meta.onboarded && !app.demo) {
     root.replaceChildren(welcomeView(ctx));
-    lastRoute = null;
+    lastRoute = 'welcome'; // so the first screen after it starts at the top
     return;
   }
   const route = currentRoute();
@@ -567,6 +648,8 @@ async function start() {
   render();
   google.prepare();
   await resuming;
+  autoCheck();
+  document.addEventListener('visibilitychange', autoCheck);
   store.requestPersistence();
   if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
     navigator.serviceWorker.register('sw.js').catch(() => {});

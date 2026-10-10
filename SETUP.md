@@ -85,6 +85,7 @@ Use any Google account for this; it can be yours or his.
 3. Go to **Audience**. Under **Test users** click **Add users** and enter **your stepdad's Gmail address**, plus yours if you want to test. Save.
    - Leave the publishing status as **Testing**. Only the people listed here can sign in, which keeps the app private to him. You don't need Google's app verification.
 4. Optional but tidy: under **Data access → Add or remove scopes**, add `.../auth/gmail.readonly` and `.../auth/drive.appdata`, then save.
+5. Optional: under **Branding**, set the **Application privacy policy link** to your site's address followed by `privacy.html` (for example `https://opennerdz.github.io/clubhouse/privacy.html`).
 
 ## Step 4: Create the Client ID
 
@@ -151,11 +152,11 @@ Microsoft marks the app as from an "unverified" publisher, which is normal for a
 Then:
 
 1. Press **Continue with Google** (for Gmail) or **Continue with Microsoft** (for Outlook, Hotmail or Live) and choose his account.
-2. **Google** shows **"Google hasn't verified this app"**. That's expected for a private app. Click **Continue**, then tick **both** boxes:
+2. Before Google's window opens, Clubhouse shows a short note on what to expect. **Google** then shows **"Google hasn't verified this app"**. That's expected for a private app. Click **Continue**, then tick **both** boxes:
    - *Read your email*: needed to find golf emails. It's read-only, so the app can't send, change or delete anything.
    - *See, create and delete its own configuration data in your Google Drive*: the backup. It only covers a hidden folder for this app and can't see his other files.
 3. **Microsoft** lists the permissions from step 5. Click **Accept**.
-4. Clubhouse searches the last 6 months of email for golf. The first check takes about a minute. With a very busy inbox it reads 500 emails at a time and asks him to press **Check email** again to carry on.
+4. Clubhouse searches the last 6 months of email for golf. The first check takes about a minute, and tee times start appearing while it reads.
 
 > **iPhone:** if the Google window opens from the home-screen icon but doesn't come back to Clubhouse afterwards, use Clubhouse in Safari instead. Turn on **Back up to Google Drive** so the data is the same in both places.
 
@@ -163,13 +164,17 @@ Then:
 
 ## Using it
 
-- **Check email** (top right) looks for new golf emails. It doesn't run in the background, so press it whenever he wants an update. If his sign-in has expired, a Google window appears briefly, or with Outlook the page goes to Microsoft and straight back.
+- **Check email** (top right) looks for new golf emails. Clubhouse also checks by itself when it's opened or brought back to the screen, as long as it can do that without a sign-in window. If his sign-in has expired, pressing **Check email** opens a Google window briefly, or with Outlook the page goes to Microsoft and straight back.
+- **After a round** that he had a booking for, the home screen asks **How did it go?** One tap opens the score form with the course and date already filled in. **I didn't play** stops it asking about that day.
 - **Coming up** lists booked tee times and competitions, in date order. Cancelled bookings are taken off automatically. Tap one to add it to Google Calendar.
 - **Golf mail** has every golf email, sorted into tee times, competitions, handicap, club news, shop & offers and other. Tap an email to see the details Clubhouse found. From there he can:
   - move it to a different category (**Show under**)
   - hide it, or hide everything from that sender
   - open it in Gmail, or record a score for that round
-- **Scores**: add a round with **Add round**. Only date, course and score are needed. If he enters the course rating and slope from the scorecard, Clubhouse estimates his handicap using the World Handicap System method.
+- **Scores**: add a round with **Add score**. Only course, score and date are needed, and the date starts as today. The courses he plays most appear as buttons under the course box, and a course he's played before fills in its par, rating and slope. If he enters the course rating and slope from the scorecard, Clubhouse estimates his handicap using the World Handicap System method.
+- **Playing partners**: add the people he plays with (Scores → **Add partner**, or **New** on the score form). Each gets a ball marker with their initials, a golf emblem or a photo. Tick them on a score or tee time, and tap a partner to see how he plays with them: rounds together, his average and his best.
+- **Deleting** a round or tee time, or hiding an email, happens straight away with an **Undo** button at the bottom of the screen.
+- On Android, the **back button** closes whatever is open on top, rather than leaving the screen.
 - **Settings** controls what appears where:
   - which sections are on the home screen
   - which kinds of golf email are collected
@@ -180,7 +185,7 @@ If some golf emails are missed, add a word they always contain in **Settings →
 
 ## Privacy and security
 
-- **No server.** Clubhouse runs entirely in his browser. It talks only to Google.
+- **No server.** Clubhouse runs entirely in his browser. It talks only to Google or Microsoft. The plain-English version for users is at `privacy.html`, linked from the welcome screen and Settings.
 - **Read-only.** The permissions are Gmail `gmail.readonly` and Outlook `Mail.Read`.
 - **Sign-in tokens aren't kept.** They stay in memory and last about an hour. With Outlook, a renewal token stays in that browser tab for the day so a reload doesn't need another sign-in.
 - **Only what it needs is kept.** Clubhouse saves the golf details it finds and a short preview of each golf email. Non-golf email is never kept.
@@ -189,6 +194,12 @@ If some golf emails are missed, add a word they always contain in **Settings →
 - **Taking it back.**
   - **Google:** **Settings → Disconnect** removes Clubhouse's access from his account. He can also remove it at https://myaccount.google.com/connections.
   - **Microsoft:** apps can't remove their own access, so **Disconnect** signs out on the device and then links to https://account.live.com/consent/Manage, where he removes Clubhouse.
+
+## Letting other people use it
+
+- **Outlook, Hotmail and Live:** anyone can sign in now. Work or school accounts may need their IT admin to approve Clubhouse first.
+- **Gmail, up to 100 people:** add each person's Gmail address under **Audience → Test users**. They'll see the "hasn't verified this app" screen, and Clubhouse's note tells them to choose Continue.
+- **Gmail, open to anyone:** reading Gmail is a *restricted* permission. Until Google verifies the app, people see a warning screen and Google caps it at 100 users, even after you switch it from **Testing** to **In production**. Expect to provide a privacy policy (`privacy.html` is a starting point), a home page on a domain you've verified with Google, and a short video of the sign-in. Google also requires a yearly security assessment for apps that send Gmail data to a server. Clubhouse doesn't do that, but check Google's current rules before you apply. It takes weeks, not days.
 
 ## Troubleshooting
 

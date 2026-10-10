@@ -37,6 +37,7 @@ There is no server. Everything runs in the browser:
 
 ```
 index.html            page shell and Content Security Policy
+privacy.html          plain-English privacy policy
 css/styles.css        all styling (light and dark)
 fonts/                Besley and Libre Franklin (SIL Open Font License)
 js/config.js          ← paste the Google / Microsoft Client IDs here

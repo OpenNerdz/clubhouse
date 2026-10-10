@@ -10,7 +10,7 @@ export const ROUND_FIELDS = {
   putts: 'Putts',
   fairways: 'Fairways hit',
   greens: 'Greens in regulation',
-  partners: 'Played with',
+  partners: 'Playing partners',
   notes: 'Notes',
 };
 
@@ -28,10 +28,11 @@ export function defaultSettings() {
     updatedAt: 0,
     home: { upcoming: true, stats: true, rounds: true, trend: false, results: true, mail: true },
     categories: { teetime: true, competition: true, handicap: true, club: true, shop: true, other: true },
-    roundFields: { par: true, rating: true, points: true, putts: false, fairways: false, greens: false, partners: false, notes: true },
+    roundFields: { par: true, rating: true, points: true, putts: false, fairways: false, greens: false, partners: true, notes: true },
     months: 6,
     extraTerms: [],
     hiddenSenders: [],
+    notPlayed: [],
     handicapEstimate: true,
     driveBackup: true,
     theme: 'auto',
@@ -46,6 +47,7 @@ export function emptyState() {
     rounds: {},
     teeTimes: {},
     courses: {},
+    friends: {},
     emails: {},
     // Local to this device; never synced.
     meta: { onboarded: false, demo: false, profile: null, lastScan: 0, lastBackup: 0, driveFileId: null, skipped: [] },
@@ -64,12 +66,13 @@ export function normalise(data) {
     rounds: s.rounds || {},
     teeTimes: s.teeTimes || {},
     courses: s.courses || {},
+    friends: s.friends || {},
     emails: s.emails || {},
     meta: { ...base.meta, ...(s.meta || {}) },
   };
 }
 
-const COLLECTIONS = ['rounds', 'teeTimes', 'courses', 'emails'];
+const COLLECTIONS = ['rounds', 'teeTimes', 'courses', 'friends', 'emails'];
 
 function mergeCollection(a = {}, b = {}) {
   const out = { ...a };

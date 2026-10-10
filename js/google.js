@@ -31,6 +31,8 @@ let granted = new Set();
 export const isConfigured = () => typeof CLIENT_ID === 'string' && /^\d+-[\w-]+\.apps\.googleusercontent\.com$/.test(CLIENT_ID.trim());
 export const hasToken = () => !!token && Date.now() < expiresAt - 60000;
 export const canBackup = () => granted.has(SCOPES.drive);
+/** Google can only sign in through its window, so this just says whether a token is still in hand. */
+export const quietSignIn = async () => hasToken();
 
 function loadGis() {
   if (window.google && window.google.accounts && window.google.accounts.oauth2) return Promise.resolve();
@@ -75,7 +77,7 @@ function ensureClient() {
     }),
     error_callback: (err) => settle(({ reject }) => {
       const messages = {
-        popup_closed: 'The Google window was closed before sign-in finished.',
+        popup_closed: 'Google sign-in didn’t finish. If Google said access is blocked, ask whoever set up Clubhouse to add your Google account to it.',
         popup_failed_to_open: 'Your browser blocked the Google sign-in window. Allow pop-ups for this site and try again.',
       };
       reject(new AuthError(messages[err && err.type] || 'Google sign-in failed. Please try again.'));

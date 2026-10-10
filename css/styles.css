@@ -351,8 +351,10 @@ small { font-size: 0.62em; font-weight: 700; letter-spacing: 0.04em; }
 }
 
 @media (max-width: 759px) {
-  .check-btn .check-label { display: none; }
-  .check-btn.is-busy .check-label { display: inline; font-size: 0.82rem; }
+  .check-btn { padding: 0 10px; font-size: 0.86rem; }
+}
+@media (max-width: 359px) {
+  .brand-word { display: none; }
 }
 
 @media (min-width: 760px) {
@@ -378,10 +380,14 @@ small { font-size: 0.62em; font-weight: 700; letter-spacing: 0.04em; }
 .page-head .kicker { margin-bottom: 6px; }
 .page-sub { margin-top: 6px; color: var(--ink-3); font-size: 0.94rem; }
 
-.columns { display: grid; gap: 18px; align-items: start; }
-.col { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
+/* On a phone the cards run in one column, with his own scores ahead of the mail. */
+.columns { display: flex; flex-direction: column; gap: 18px; }
+.col { display: contents; }
+.columns .card-mail { order: 1; }
 @media (min-width: 900px) {
-  .columns { grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); }
+  .columns { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); align-items: start; }
+  .col { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
+  .columns .card-mail { order: 0; }
   .columns-single { grid-template-columns: minmax(0, 1fr); }
 }
 
@@ -937,8 +943,22 @@ input[type="search"]::-webkit-search-cancel-button { -webkit-appearance: none; a
 .field-row-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .field-inline { flex-direction: row; align-items: center; justify-content: space-between; gap: 16px; }
 .field-inline select { width: auto; min-width: 150px; }
-.field-row-holes { grid-template-columns: auto 1fr; align-items: start; }
-.field-row-holes .seg span { padding: 12px 16px; }
+.field-row-holes { grid-template-columns: minmax(0, 1fr) auto; align-items: start; }
+.field-row-holes .seg span { min-width: 52px; padding: 12px 16px; text-align: center; }
+
+/* Recent courses, one tap to fill in. */
+.picks { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+.pick {
+  min-height: 36px;
+  padding: 0 12px;
+  border: 1px dashed var(--rule-strong);
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--green-ink);
+  font-weight: 700;
+  font-size: 0.86rem;
+}
+.pick:hover { border-style: solid; background: var(--card-2); }
 .score-input { font-family: var(--display); font-size: 1.35rem; font-weight: 750; }
 
 .settings-group .field { padding: 0 18px; margin-bottom: 16px; }
@@ -1253,6 +1273,7 @@ input[type="search"]::-webkit-search-cancel-button { -webkit-appearance: none; a
 .or::before, .or::after { content: ""; flex: 1; border-top: 1px solid var(--rule); }
 .welcome-privacy { display: flex; gap: 8px; align-items: flex-start; color: var(--ink-3); font-size: 0.84rem; }
 .welcome-privacy .icon { margin-top: 2px; }
+.welcome-privacy a, .footnote a { color: inherit; font-weight: 700; text-underline-offset: 3px; }
 
 @media (min-width: 900px) {
   .welcome { grid-template-columns: 1fr 1fr; grid-template-rows: none; }
@@ -1261,6 +1282,197 @@ input[type="search"]::-webkit-search-cancel-button { -webkit-appearance: none; a
   .welcome-card { margin-top: 0; }
   .crest-name { font-size: 3.4rem; }
 }
+
+/* ---------- ball markers: playing partners ---------- */
+
+/* An enamel coin with a brass rim, like the marker you put behind your ball on the green. */
+.marker {
+  --size: 32px;
+  position: relative;
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: var(--size);
+  height: var(--size);
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 32% 26%, rgba(255, 255, 255, 0.3), rgba(255, 255, 255, 0) 56%),
+    var(--m, var(--green));
+  color: var(--m-ink, #fff);
+  font-family: var(--display);
+  font-size: calc(var(--size) * 0.36);
+  font-weight: 750;
+  line-height: 1;
+  letter-spacing: 0.02em;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.28);
+  overflow: hidden;
+}
+/* The rim is drawn on top, so it frames a photo too. */
+.marker::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  box-shadow:
+    inset 0 0 0 max(1.5px, calc(var(--size) * 0.065)) #cfb06a,
+    inset 0 0 0 max(2.2px, calc(var(--size) * 0.095)) rgba(60, 40, 10, 0.32);
+  pointer-events: none;
+}
+.marker img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }
+.marker .icon { stroke-width: 2; }
+.marker-text { transform: translateY(0.04em); }
+.marker-new {
+  background: none;
+  border: 1.5px dashed var(--rule-strong);
+  color: var(--green-ink);
+  box-shadow: none;
+}
+.marker-new::after { display: none; }
+
+/* Coins overlapping, for a round's partners. */
+.markers { display: inline-flex; align-items: center; flex: none; }
+.markers .marker { box-shadow: 0 0 0 2px var(--card), 0 1px 2px rgba(0, 0, 0, 0.2); }
+.markers .marker + .marker { margin-left: calc(var(--size) * -0.3); }
+.markers-more { margin-left: 5px; color: var(--ink-3); font-size: 0.74rem; font-weight: 800; }
+.with { display: flex; align-items: center; gap: 8px; min-width: 0; margin-top: 5px; color: var(--ink-2); font-size: 0.86rem; font-weight: 600; }
+.with > span:last-child { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.ticket-body .markers .marker { box-shadow: 0 0 0 2px var(--card-2), 0 1px 2px rgba(0, 0, 0, 0.2); }
+
+/* Picking partners on a form: tap a marker to tick it. */
+.partner-picker { display: flex; flex-wrap: wrap; gap: 8px; }
+.partner-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 48px;
+  padding: 6px 16px 6px 7px;
+  border: 1px solid var(--rule-strong);
+  border-radius: 999px;
+  background: var(--card);
+  color: var(--ink);
+  font-size: 0.92rem;
+  font-weight: 650;
+  transition: background-color 0.15s, border-color 0.15s;
+}
+.partner-chip:hover { border-color: var(--ink-3); }
+.partner-chip.on { border-color: var(--green); background: var(--green-soft); box-shadow: inset 0 0 0 1px var(--green); }
+.chip-marker { position: relative; display: inline-grid; }
+.chip-tick {
+  position: absolute;
+  right: -5px;
+  bottom: -4px;
+  display: none;
+  place-items: center;
+  width: 19px;
+  height: 19px;
+  border-radius: 50%;
+  background: var(--green);
+  color: var(--on-green);
+  box-shadow: 0 0 0 2px var(--card);
+}
+.partner-chip.on .chip-tick { display: grid; }
+.chip-tick .icon { stroke-width: 3; }
+.partner-new { border-style: dashed; color: var(--green-ink); }
+.partner-new .marker-new { --size: 34px; }
+
+/* The marker editor. */
+.partner-head { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 18px; }
+.marker-preview { display: grid; place-items: center; }
+.marker-preview .marker { box-shadow: 0 6px 16px -4px rgba(0, 0, 0, 0.4); }
+.emblem-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(50px, 1fr)); gap: 4px; }
+.emblem {
+  display: grid;
+  place-items: center;
+  height: 56px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: none;
+}
+.emblem:hover { background: var(--card-2); }
+.emblem.on { border-color: var(--green); background: var(--green-soft); }
+.swatches { display: grid; grid-template-columns: repeat(8, minmax(0, 40px)); gap: 8px; }
+.swatch {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  aspect-ratio: 1;
+  border: 0;
+  border-radius: 50%;
+  background: var(--m);
+  color: var(--m-ink);
+  box-shadow: inset 0 0 0 3px #cfb06a;
+}
+.swatch.on { box-shadow: inset 0 0 0 3px #cfb06a, 0 0 0 2px var(--card), 0 0 0 4px var(--green); }
+.swatch .icon { stroke-width: 3; }
+.photo-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; }
+
+/* One partner. */
+.partner-hero { display: flex; align-items: center; gap: 18px; }
+.partner-hero .marker { box-shadow: 0 6px 16px -4px rgba(0, 0, 0, 0.4); }
+.partner-hero-text { display: flex; flex-direction: column; gap: 4px; color: var(--ink); font-family: var(--display); font-size: 1.15rem; font-weight: 700; }
+.partner-hero-text span { color: var(--ink-3); font-family: var(--font); font-size: 0.88rem; font-weight: 500; }
+.board-compact .board-value { font-size: 1.9rem; }
+.partner-rounds .subhead { padding: 0 0 8px; }
+.partner-rounds .list { border: 1px solid var(--rule); border-radius: var(--radius-sm); overflow: hidden; background: var(--card); }
+
+/* Everyone, as a list and as a strip on the Scores screen. */
+.partner-list { margin: -6px -22px; }
+.partner-row .icon { color: var(--ink-3); }
+.partner-strip { display: grid; grid-template-columns: repeat(auto-fill, minmax(78px, 1fr)); gap: 4px; padding: 12px 10px 14px; }
+.partner-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 10px 4px 8px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--ink);
+  text-align: center;
+}
+.partner-tile:hover { background: var(--card-2); }
+.partner-tile .marker { margin-bottom: 2px; }
+.partner-tile-name { max-width: 100%; overflow: hidden; font-size: 0.9rem; font-weight: 700; white-space: nowrap; text-overflow: ellipsis; }
+.partner-tile-count { color: var(--ink-3); font-size: 0.76rem; font-weight: 600; }
+
+/* ---------- card to return: asks for the score after a round ---------- */
+
+.return {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px 20px;
+  padding: 18px 18px 18px 20px;
+  border-left: 4px solid var(--flag);
+}
+.return-text { min-width: 0; }
+.return-kicker { color: var(--flag); font-size: 0.7rem; font-weight: 800; letter-spacing: 0.16em; text-transform: uppercase; }
+.return-title { margin-top: 4px; font-size: 1.3rem; overflow-wrap: anywhere; }
+.return-meta { margin-top: 4px; color: var(--ink-3); font-size: 0.9rem; }
+.return-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+
+.more-btn { margin: 0 auto; }
+
+/* Numbered steps in a dialog. */
+.steps { display: grid; gap: 10px; margin: 0; padding-left: 22px; color: var(--ink-2); list-style: decimal; }
+.steps li::marker { color: var(--green-ink); font-family: var(--display); font-weight: 750; }
+.steps strong { color: var(--ink); }
+
+/* ---------- privacy page ---------- */
+
+.doc { max-width: 680px; margin: 0 auto; padding: 36px 20px 72px; }
+.doc h1 { margin: 8px 0 14px; font-size: 2rem; line-height: 1.15; }
+.doc h2 { margin: 30px 0 8px; padding-bottom: 6px; border-bottom: 3px double var(--rule); font-size: 1.2rem; }
+.doc p, .doc li { color: var(--ink-2); line-height: 1.6; }
+.doc p + p { margin-top: 10px; }
+.doc ul { display: grid; gap: 8px; margin: 8px 0 10px; padding-left: 20px; list-style: disc; }
+.doc a:not(.link) { color: var(--green-ink); font-weight: 650; text-underline-offset: 3px; overflow-wrap: anywhere; }
+.doc strong { color: var(--ink); }
+.doc-lead { font-size: 1.06rem; }
+.doc-foot { margin-top: 36px; }
 
 /* ---------- toast ---------- */
 
@@ -1284,6 +1496,21 @@ input[type="search"]::-webkit-search-cancel-button { -webkit-appearance: none; a
   transition: opacity 0.2s, transform 0.2s;
 }
 .toast.show { opacity: 1; transform: translate(-50%, 0); }
+.toast.has-action { display: flex; align-items: center; gap: 16px; width: max-content; padding: 6px 6px 6px 18px; }
+.toast.has-action.show { pointer-events: auto; }
+.toast-action {
+  min-height: 40px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--gold);
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  font-size: 0.82rem;
+}
+.toast-action:hover { background: rgba(255, 255, 255, 0.08); }
 .toast-error { background: #8f241d; border-color: rgba(255, 255, 255, 0.25); color: #fff; }
 @media (min-width: 760px) { .toast { bottom: 28px; } }
 

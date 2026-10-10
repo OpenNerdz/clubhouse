@@ -94,6 +94,11 @@ async function renew() {
   }
 }
 
+/** Gets a token without leaving the page, if that's possible. */
+export async function quietSignIn() {
+  return hasToken() || renew();
+}
+
 /**
  * Gets a token, going to Microsoft's sign-in page if needed. In that case the page
  * leaves and `resume` says what to carry on with when it comes back.

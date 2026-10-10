@@ -136,9 +136,71 @@ export function upcomingItems({ emails, teeTimes }, today) {
   }
   for (const t of live(teeTimes)) {
     if (t.date < today) continue;
-    items.push({ type: 'teetime', id: t.id, date: t.date, time: t.time, title: t.course || 'Tee time', course: t.course, players: t.players, notes: t.notes, manual: true });
+    items.push({ type: 'teetime', id: t.id, date: t.date, time: t.time, title: t.course || 'Tee time', course: t.course, players: t.players, notes: t.notes, friendIds: t.friendIds || [], manual: true });
   }
   return items.sort((a, b) => (a.date + (a.time || '99')).localeCompare(b.date + (b.time || '99')));
+}
+
+const isoDay = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+// Subjects that mean he's actually playing, not just that entries are open.
+const ENTERED = /\bconfirm|you(?:'|’)re (?:entered|in)\b|\bdraw\b|start(?:ing)? sheet|tee times? (?:are )?(?:out|published|available)/i;
+
+/**
+ * Rounds he has played in the last week (going by his tee times and competition
+ * entries) with no score recorded for that day yet, newest first. A tee time
+ * today only counts once the round should be over. `dismissed` holds days he
+ * said he didn't play.
+ */
+export function unscoredRounds({ emails, teeTimes, rounds, dismissed = [] }, now = new Date()) {
+  const todayIso = isoDay(now);
+  const weekAgo = isoDay(new Date(now.getFullYear(), now.getMonth(), now.getDate() - 7));
+  const scored = new Set(live(rounds).map((r) => r.date));
+  const skip = new Set(dismissed);
+  const over = (date, time) => {
+    if (date < weekAgo || date > todayIso) return false;
+    if (date < todayIso) return true;
+    if (!time) return false;
+    const [hh, mm] = time.split(':').map(Number);
+    return now.getHours() * 60 + now.getMinutes() >= hh * 60 + mm + 270;
+  };
+  const byDate = new Map();
+  const consider = (item) => {
+    if (!item.date || !over(item.date, item.time) || scored.has(item.date) || skip.has(item.date)) return;
+    const prev = byDate.get(item.date);
+    // A booking and a competition entry on the same day are the same round.
+    if (!prev || (!prev.course && item.course)) byDate.set(item.date, { ...prev, ...item });
+  };
+  for (const b of bookingsFromEmails(emails)) {
+    if (b.status !== 'cancelled') consider({ id: b.id, date: b.date, time: b.time, course: b.course });
+  }
+  for (const e of emails) {
+    const d = e.details;
+    if (e.category === 'competition' && d.kind !== 'result' && ENTERED.test(e.subject)) {
+      consider({ id: `e-${e.id}`, date: d.date, time: d.time, course: d.course, event: eventTitle(e.subject) });
+    }
+  }
+  for (const t of live(teeTimes)) consider({ id: t.id, date: t.date, time: t.time, course: t.course });
+  return [...byDate.values()].sort(byDateDesc);
+}
+
+/** How many rounds he's played with each partner. */
+export function partnerCounts(rounds) {
+  const counts = new Map();
+  for (const r of live(rounds)) for (const id of r.friendIds || []) counts.set(id, (counts.get(id) || 0) + 1);
+  return counts;
+}
+
+/** Rounds with one partner, newest first, with his average and best score when they play together. */
+export function partnerStats(rounds, friendId) {
+  const together = live(rounds).filter((r) => (r.friendIds || []).includes(friendId)).sort(byDateDesc);
+  const full = together.filter((r) => (r.holes || 18) === 18 && r.score);
+  return {
+    rounds: together,
+    count: together.length,
+    average: full.length ? round1(mean(full.map((r) => r.score))) : null,
+    best: full.length ? full.reduce((b, r) => (r.score < b.score ? r : b)) : null,
+    last: together.length ? together[0].date : null,
+  };
 }
 
 /** Most recent handicap figure found in email. */

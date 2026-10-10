@@ -26,5 +26,5 @@ export function welcomeView(ctx) {
           h('button', { class: 'btn btn-wide', type: 'button', onclick: ctx.actions.startDemo }, 'Look around with sample data'),
           h('button', { class: 'link-btn', type: 'button', onclick: ctx.actions.finishOnboarding }, 'Skip, I only want to keep scores')),
         h('p', { class: 'welcome-privacy' }, icon('shield', 16),
-          h('span', null, 'Read-only. Your email is read on this device and never sent anywhere else.')))));
+          h('span', null, 'Read-only. Your email is read on this device and never sent anywhere else. ', h('a', { href: 'privacy.html' }, 'How your data is handled'))))));
 }

@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
+  <meta name="description" content="How Clubhouse handles your email, scores and backups.">
+  <meta name="theme-color" content="#f1ebdc" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0c1410" media="(prefers-color-scheme: dark)">
+  <title>Privacy · Clubhouse</title>
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="css/styles.css">
+  <script src="js/theme-init.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <a class="brand" href="./" aria-label="Back to Clubhouse"><img src="icons/icon.svg" alt="" width="34" height="34"><span class="brand-word">Clubhouse</span></a>
+    </div>
+  </header>
+  <main class="doc">
+    <p class="kicker">Privacy</p>
+    <h1>How Clubhouse handles your data</h1>
+    <p class="doc-lead">Clubhouse runs entirely in your web browser. There is no Clubhouse server, so nobody else (including whoever runs this site) can see your email or your scores.</p>
+
+    <h2>What it reads</h2>
+    <p>When you connect Gmail or Outlook, Clubhouse searches your mailbox for golf words such as “tee time” and “stableford”, then reads those messages on your device to pick out tee times, competitions, handicap updates, club news and golf orders. Messages that turn out not to be about golf are skipped and not kept.</p>
+    <p>Access is read-only. Clubhouse can’t send, delete, move or mark email.</p>
+
+    <h2>What it keeps</h2>
+    <ul>
+      <li>For each golf email: the sender, subject, date, a short preview and the details picked out of it, such as the date, time, course and booking reference.</li>
+      <li>The scores and tee times you enter, your settings, and the names of your playing partners with any photos you choose for them (made small first).</li>
+    </ul>
+    <p>All of this is stored in your browser on this device.</p>
+
+    <h2>Backup</h2>
+    <p>If backup is switched on (it is unless you turn it off in Settings), a copy of the above goes to a private Clubhouse folder in <strong>your own</strong> Google Drive or OneDrive. That lets your scores follow you to another device. Clubhouse can only reach its own folder, not the rest of your files.</p>
+
+    <h2>Sign-in</h2>
+    <p>You sign in on Google’s or Microsoft’s own page; Clubhouse never sees your password. The access it gets back is kept in memory and only ever sent to Google or Microsoft. Google’s access lasts up to an hour. Microsoft’s can be renewed until you close the tab, for a day at most.</p>
+
+    <h2>What it doesn’t do</h2>
+    <ul>
+      <li>No adverts, analytics or tracking of any kind.</li>
+      <li>Nothing is sold or shared. Your data goes nowhere except your browser and, for backup, your own Drive or OneDrive.</li>
+      <li>Fonts and icons come from this site, so no other company is told when you open it.</li>
+    </ul>
+    <p>Clubhouse’s use of information received from Google APIs adheres to the <a href="https://developers.google.com/terms/api-services-user-data-policy">Google API Services User Data Policy</a>, including the Limited Use requirements.</p>
+
+    <h2>Removing your data</h2>
+    <ul>
+      <li><strong>Disconnect</strong> (Settings) removes the golf emails from the device and cancels Clubhouse’s access, or shows you where to do that in your Google or Microsoft account.</li>
+      <li><strong>Delete everything</strong> (Settings) removes all Clubhouse data from the device.</li>
+      <li>To remove the backup: in Google Drive, open Settings, then Manage apps, then Clubhouse’s Options, then “Delete hidden app data”. In OneDrive, delete the Apps › Clubhouse folder.</li>
+    </ul>
+
+    <h2>Questions</h2>
+    <p>Clubhouse is open source. You can read exactly what it does, or ask a question, at <a href="https://github.com/OpenNerdz/clubhouse">github.com/OpenNerdz/clubhouse</a>.</p>
+
+    <p class="doc-foot"><a class="link" href="./">Back to Clubhouse</a></p>
+  </main>
+</body>
+</html>

@@ -47,3 +47,15 @@ test('backups leave out device-only details', () => {
   assert.ok(b.savedAt > 0);
   assert.ok(sameData(s, b));
 });
+
+test('playing partners sync like rounds, and old backups without them still load', () => {
+  const local = emptyState();
+  local.friends = { m: { id: 'm', name: 'Mike', updatedAt: 2 } };
+  const remote = emptyState();
+  remote.friends = { m: { id: 'm', name: 'Mike Turner', updatedAt: 5 }, s: { id: 's', name: 'Steve', updatedAt: 1 } };
+  const m = merge(local, remote);
+  assert.equal(m.friends.m.name, 'Mike Turner');
+  assert.ok(m.friends.s);
+  const old = { rounds: { a: { id: 'a', score: 80, updatedAt: 1 } }, settings: {} };
+  assert.deepEqual(merge(local, old).friends, local.friends);
+});

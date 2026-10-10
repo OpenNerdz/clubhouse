@@ -28,6 +28,7 @@ export function sampleEmails(dayFirst = true) {
   const teeC = at(6);
   const comp = at(10);
   const winter = at(24);
+  const played = at(-2);
 
   return [
     {
@@ -121,6 +122,12 @@ export function sampleEmails(dayFirst = true) {
       text: `Stay dry on the golf course. Up to 40% off waterproof jackets and trousers, plus free delivery on orders over £50. Shop now.`,
     },
     {
+      id: 'demo-17', received: at(-8, 19, 30),
+      from: 'Hollins Park Golf Club <proshop@hollinspark.example>',
+      subject: 'Tee time booked',
+      text: `Your tee time at Hollins Park Golf Club has been booked.\n\n${long(played)}, 10:20, 2 players.\nBooking ref: HP3371\n\nSee you on the first tee!`,
+    },
+    {
       id: 'demo-16', received: at(-1, 21, 5),
       from: 'Mike Turner <mike.turner@example.com>',
       subject: 'Golf on Saturday?',
@@ -165,17 +172,26 @@ export function buildDemoState(dayFirst = true) {
     [-49, 'oak', 89, 31, 34], [-41, 'king', 85, 35, 31], [-34, 'hol', 84, 35, 30], [-27, 'oak', 86, 34, 32],
     [-13, 'oak', 84, 36, 31], [-6, 'oak', 85, 34, 30],
   ];
+  const friends = {
+    mike: { name: 'Mike Turner', colour: 'navy', emblem: null },
+    steve: { name: 'Steve Hall', colour: 'claret', emblem: 'pint' },
+    dave: { name: 'Dave Wilson', colour: 'teal', emblem: 'birdie' },
+    ken: { name: 'Ken Barlow', colour: 'gold', emblem: 'flag' },
+  };
+  for (const [key, f] of Object.entries(friends)) state.friends[`demo-f-${key}`] = { ...f, id: `demo-f-${key}`, photo: null, updatedAt: 1 };
+  const who = [['mike', 'steve'], ['dave'], ['mike'], ['mike', 'steve', 'ken'], ['steve'], [], ['mike', 'dave'], ['ken'],
+    ['mike', 'steve'], ['dave'], ['mike'], ['mike', 'steve'], ['mike', 'steve', 'dave'], ['mike']];
   const notes = { '-13': 'Saturday Stableford, 3rd in division', '-6': 'October Medal', '-73': 'Windy. Lost two balls on the back nine.' };
   rounds.forEach(([days, key, score, points, putts], i) => {
     const c = courses[key];
     const id = `demo-r${i}`;
     state.rounds[id] = {
       id, date: iso(at(days)), course: c.name, holes: 18, score, par: c.par, rating: c.rating, slope: c.slope,
-      points, putts, notes: notes[String(days)] || '', updatedAt: 1,
+      points, putts, notes: notes[String(days)] || '', friendIds: who[i].map((k) => `demo-f-${k}`), updatedAt: 1,
     };
   });
   state.rounds['demo-r9h'] = { id: 'demo-r9h', date: iso(at(-20)), course: 'Oakmere Golf Club', holes: 9, score: 42, par: 36, notes: 'Evening nine', updatedAt: 1 };
 
-  state.teeTimes['demo-t1'] = { id: 'demo-t1', date: iso(at(20)), time: '11:00', course: 'Brackenwood Golf Club', players: 4, notes: 'Away day with the society', updatedAt: 1 };
+  state.teeTimes['demo-t1'] = { id: 'demo-t1', date: iso(at(20)), time: '11:00', course: 'Brackenwood Golf Club', players: 4, notes: 'Away day with the society', friendIds: ['demo-f-mike', 'demo-f-steve', 'demo-f-dave'], updatedAt: 1 };
   return state;
 }

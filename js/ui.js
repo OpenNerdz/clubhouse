@@ -67,6 +67,17 @@ const ICONS = {
   info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/>',
   alert: '<path d="M12 4 2.5 20h19z"/><path d="M12 10v4M12 17h.01"/>',
   shield: '<path d="M12 3 5 6v5c0 4.5 3 8.5 7 10 4-1.5 7-5.5 7-10V6z"/><path d="m9 12 2 2 4-4"/>',
+  camera: '<path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/>',
+  partner: '<circle cx="10" cy="8" r="3.5"/><path d="M3.5 20a6.5 6.5 0 0 1 13 0"/><path d="M19 8v6M16 11h6"/>',
+  // Emblems for ball markers.
+  ball: '<circle cx="12" cy="12" r="8.5"/><path d="M9 8.6h.01M12.4 7.8h.01M15.3 9.6h.01M8.6 12.2h.01M11.8 11.4h.01M15 13h.01M10.4 15.4h.01M13.6 16h.01" stroke-width="2.4"/>',
+  tee: '<circle cx="12" cy="6" r="3.6"/><path d="M6.5 11h11"/><path d="M7.5 11c1.6 1.4 3.3 1.8 3.8 3.4L12 21l.7-6.6c.5-1.6 2.2-2 3.8-3.4"/>',
+  iron: '<path d="M17.5 3 10.2 16.6"/><path d="M10.2 16.6 4.6 18.4l.7 2.4 7.4-1.6-.5-2.6z"/>',
+  birdie: '<path d="M3 15c2.8.6 5-.2 6.8-2.2C11.6 10.6 13.2 8 16.2 8c1.6 0 2.8.9 3.3 2.2L22 11l-2.4.9c-.2 4.2-3.4 7.1-7.8 7.1-3.6 0-6.8-1.7-8.8-4z"/><path d="M16.6 10.6h.01" stroke-width="2.6"/><path d="M8.4 15.6c2 .5 4.1-.1 5.6-1.7"/>',
+  buggy: '<path d="M5 15.5V5h9"/><path d="M5 9h8.5l2.6 4.2H20v2.3"/><circle cx="8" cy="16.5" r="2"/><circle cx="17" cy="16.5" r="2"/><path d="M10 16.5h5"/>',
+  pint: '<path d="M7 4h10l-1.4 16H8.4z"/><path d="M7.5 9.5h9"/>',
+  star: '<path d="m12 3.5 2.6 5.3 5.8.8-4.2 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8-4.2-4.1 5.8-.8z"/>',
+  heart: '<path d="M12 20s-7.5-4.6-7.5-10.2A4.2 4.2 0 0 1 12 7.3a4.2 4.2 0 0 1 7.5 2.5C19.5 15.4 12 20 12 20z"/>',
 };
 
 export function icon(name, size = 20) {
@@ -83,6 +94,78 @@ export function icon(name, size = 20) {
   svg.setAttribute('class', 'icon');
   svg.innerHTML = ICONS[name] || ''; // static markup from the table above only
   return svg;
+}
+
+/* ---------- ball markers: how playing partners are shown ---------- */
+
+// Enamel colours for a marker, each with the ink that reads on it.
+export const MARKER_COLOURS = {
+  green: ['#1f5c45', '#ffffff'],
+  navy: ['#1f3b63', '#ffffff'],
+  claret: ['#7b2435', '#ffffff'],
+  red: ['#b4302a', '#ffffff'],
+  teal: ['#17676a', '#ffffff'],
+  plum: ['#5a3a6e', '#ffffff'],
+  slate: ['#47525e', '#ffffff'],
+  gold: ['#d6b064', '#2a2410'],
+};
+export const MARKER_EMBLEMS = ['flag', 'ball', 'tee', 'iron', 'birdie', 'trophy', 'buggy', 'pint', 'star', 'heart'];
+
+export function initials(name = '') {
+  const words = name.trim().split(/\s+/).filter(Boolean);
+  if (!words.length) return '?';
+  return (words[0][0] + (words.length > 1 ? words[words.length - 1][0] : '')).toUpperCase();
+}
+
+export const firstName = (name = '') => name.trim().split(/\s+/)[0] || name;
+
+/** A colour for someone who hasn't chosen one: the same every time for the same name. */
+export function defaultColour(name = '') {
+  let n = 0;
+  for (const c of name) n = (n * 31 + c.codePointAt(0)) >>> 0;
+  const keys = Object.keys(MARKER_COLOURS);
+  return keys[n % keys.length];
+}
+
+// Only small pictures made by squarePhoto() are shown, never an address from elsewhere.
+const isPhoto = (src) => typeof src === 'string' && /^data:image\/(?:jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(src);
+
+/** A partner's ball marker: their photo, or an emblem or their initials on an enamel coin. */
+export function marker(friend, size = 32) {
+  const photo = isPhoto(friend.photo);
+  const [bg, ink] = MARKER_COLOURS[friend.colour] || MARKER_COLOURS[defaultColour(friend.name)];
+  const el = h('span', { class: `marker ${photo ? 'marker-photo' : ''}`, 'aria-hidden': 'true' });
+  el.style.setProperty('--size', `${size}px`);
+  el.style.setProperty('--m', bg);
+  el.style.setProperty('--m-ink', ink);
+  if (photo) el.append(h('img', { src: friend.photo, alt: '', width: size, height: size }));
+  else if (friend.emblem && ICONS[friend.emblem]) el.append(icon(friend.emblem, Math.round(size * 0.54)));
+  else el.append(h('span', { class: 'marker-text' }, initials(friend.name)));
+  return el;
+}
+
+/** Several markers overlapping, like coins on a green. */
+export function markerStack(friends, size = 22, max = 4) {
+  const shown = friends.slice(0, max);
+  return h('span', { class: 'markers', 'aria-hidden': 'true' },
+    shown.map((f) => marker(f, size)),
+    friends.length > max ? h('span', { class: 'markers-more' }, `+${friends.length - max}`) : null);
+}
+
+/** Crops a photo to a small square (faces sit high in portrait shots) and returns it as a JPEG data URL. */
+export async function squarePhoto(file, size = 192) {
+  const bmp = await createImageBitmap(file);
+  const side = Math.min(bmp.width, bmp.height);
+  const sx = (bmp.width - side) / 2;
+  const sy = (bmp.height - side) * 0.3;
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const g = canvas.getContext('2d');
+  g.imageSmoothingQuality = 'high';
+  g.drawImage(bmp, sx, sy, side, side, 0, 0, size, size);
+  if (bmp.close) bmp.close();
+  return canvas.toDataURL('image/jpeg', 0.84);
 }
 
 export function googleLogo(size = 18) {
@@ -188,17 +271,64 @@ export function greeting() {
 /* ---------- toast & dialogs ---------- */
 
 let toastTimer = null;
-export function toast(message, { tone = 'info' } = {}) {
+/** A short message at the bottom of the screen. `action` adds a button, e.g. { label: 'Undo', run }. */
+export function toast(message, { tone = 'info', action } = {}) {
   let el = document.getElementById('toast');
   if (!el) {
     el = h('div', { id: 'toast', class: 'toast', role: 'status', 'aria-live': 'polite' });
     document.body.append(el);
   }
-  el.className = `toast toast-${tone}`;
-  el.textContent = message;
+  const hide = () => el.classList.remove('show');
+  el.className = `toast toast-${tone} ${action ? 'has-action' : ''}`;
+  el.replaceChildren();
+  add(el, h('span', null, message), action ? h('button', {
+    class: 'toast-action',
+    type: 'button',
+    onclick: () => { hide(); clearTimeout(toastTimer); action.run(); },
+  }, action.label) : null);
   requestAnimationFrame(() => el.classList.add('show'));
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => el.classList.remove('show'), tone === 'error' ? 6000 : 3200);
+  toastTimer = setTimeout(hide, action ? 7000 : tone === 'error' ? 6000 : 3200);
+}
+
+// The phone's back button (or back gesture) should close a sheet, not leave the
+// screen behind it. Each open sheet gets one history entry that "back" removes.
+const sheets = [];
+let sheetEntry = false;
+let backTimer = null;
+
+window.addEventListener('popstate', () => {
+  if (!sheetEntry) return;
+  sheetEntry = false;
+  const top = sheets[sheets.length - 1];
+  if (top) top.close();
+});
+
+function sheetOpened(dlg) {
+  clearTimeout(backTimer);
+  sheets.push(dlg);
+  if (!sheetEntry) {
+    history.pushState({ sheet: true }, '');
+    sheetEntry = true;
+  }
+}
+
+function sheetClosed(dlg) {
+  sheets.splice(sheets.indexOf(dlg), 1);
+  if (sheets.length) {
+    if (!sheetEntry) {
+      history.pushState({ sheet: true }, '');
+      sheetEntry = true;
+    }
+    return;
+  }
+  // Wait a moment: closing one sheet often opens the next, which keeps the entry.
+  backTimer = setTimeout(() => {
+    if (sheets.length || !sheetEntry) return;
+    sheetEntry = false;
+    // Only step back over our own entry, never past a page he has since moved to.
+    if (history.state && history.state.sheet) history.back();
+  }, 0);
 }
 
 /**
@@ -218,6 +348,7 @@ export function openDialog({ title, build, className = '', onClose }) {
   );
   dlg.addEventListener('close', () => {
     dlg.remove();
+    sheetClosed(dlg);
     if (onClose) onClose();
   });
   // Tapping the dimmed area outside the sheet closes it.
@@ -226,6 +357,7 @@ export function openDialog({ title, build, className = '', onClose }) {
   });
   document.body.append(dlg);
   dlg.showModal();
+  sheetOpened(dlg);
   // On phones, jumping into a text box would pop the keyboard over the form.
   const first = dlg.querySelector('[autofocus]');
   if (first && window.matchMedia('(pointer: fine)').matches) first.focus();

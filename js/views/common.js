@@ -1,9 +1,15 @@
 // Pieces shared by several screens. The look borrows from golf's own objects:
 // the scorecard, the clubhouse honours board, the starter's ticket and tee sheet.
-import { h, googleLogo, microsoftLogo, penCircle, formatDay, formatTime, formatEmailDate, formatFullDate, formatShortDate, timeParts, whenLabel, weekdayShort, monthShort, fromIso } from '../ui.js';
+import { h, googleLogo, microsoftLogo, penCircle, markerStack, formatDay, formatTime, formatEmailDate, formatFullDate, formatShortDate, timeParts, whenLabel, weekdayShort, monthShort, fromIso } from '../ui.js';
 import { CATEGORIES } from '../parser.js';
 import { latestHandicapEmail, formatIndex, scoreToPar, resultTitle } from '../golf.js';
 import { emailSheet, roundSheet, upcomingSheet } from './sheets.js';
+import { joinNames, shortNames } from './partners.js';
+
+/** Small overlapping markers and first names, e.g. ◉◉ Mike & Steve. */
+function withPartners(ctx, friends) {
+  return h('span', { class: 'with' }, markerStack(friends, 20), h('span', null, joinNames(shortNames(ctx, friends))));
+}
 
 export const ordinal = (n) => {
   const s = ['th', 'st', 'nd', 'rd'];
@@ -80,7 +86,7 @@ export function mailRow(ctx, e) {
 const longDay = (iso) => new Intl.DateTimeFormat(undefined, { weekday: 'long', day: 'numeric', month: 'long' }).format(fromIso(iso));
 
 /** The starter's ticket: a stub with the time, then where, when and who. */
-export function ticket(item, { onClick, kicker } = {}) {
+export function ticket(item, { onClick, kicker, ctx } = {}) {
   const soon = whenLabel(item.date);
   const t = item.time ? timeParts(item.time) : null;
   const d = fromIso(item.date);
@@ -104,11 +110,12 @@ export function ticket(item, { onClick, kicker } = {}) {
         soon ? h('span', { class: `stamp ${soon === 'Today' || soon === 'Tomorrow' ? 'stamp-now' : ''}` }, soon) : null),
       h('span', { class: 'ticket-title' }, item.title),
       h('span', { class: 'sr-only' }, longDay(item.date), item.time ? `, ${formatTime(item.time)}` : ''),
-      meta.length ? h('span', { class: 'ticket-meta' }, meta.join(' · ')) : null));
+      meta.length ? h('span', { class: 'ticket-meta' }, meta.join(' · ')) : null,
+      ctx && ctx.friendsOf(item).length ? withPartners(ctx, ctx.friendsOf(item)) : null));
 }
 
 export function nextUp(ctx, item) {
-  return ticket(item, { onClick: () => upcomingSheet(ctx, item) });
+  return ticket(item, { ctx, onClick: () => upcomingSheet(ctx, item) });
 }
 
 /** A line on the starter's tee sheet: date, time, then what and who. */
@@ -130,7 +137,8 @@ export function upcomingRow(ctx, item) {
       h('span', { class: 'row-main' },
         h('span', { class: 'sr-only' }, `${formatFullDate(item.date)}${item.time ? `, ${formatTime(item.time)}` : ''}. `),
         h('span', { class: 'row-title' }, item.title),
-        meta.length ? h('span', { class: 'row-meta' }, meta.join(' · ')) : null),
+        meta.length ? h('span', { class: 'row-meta' }, meta.join(' · ')) : null,
+        ctx.friendsOf(item).length ? withPartners(ctx, ctx.friendsOf(item)) : null),
       soon ? h('span', { class: 'when' }, soon) : null));
 }
 
@@ -139,18 +147,21 @@ export function roundRow(ctx, r, { good = false } = {}) {
   const toPar = scoreToPar(r);
   const meta = [];
   if (r.holes === 9) meta.push('9 holes');
-  if (r.partners) meta.push(`with ${r.partners}`);
+  const friends = ctx.friendsOf(r);
+  if (!friends.length && r.partners) meta.push(`with ${r.partners}`);
+  const withText = friends.length ? `, with ${joinNames(friends.map((f) => f.name))}` : '';
   return h('li', null,
     h('button', {
       class: 'row round',
       type: 'button',
       onclick: () => roundSheet(ctx, { round: r }),
-      'aria-label': `${r.course || 'Round'}, ${formatFullDate(r.date)}, scored ${r.score}${r.points ? `, ${r.points} points` : ''}${good ? ', circled as a good round' : ''}`,
+      'aria-label': `${r.course || 'Round'}, ${formatFullDate(r.date)}, scored ${r.score}${r.points ? `, ${r.points} points` : ''}${withText}${good ? ', circled as a good round' : ''}`,
     },
       h('span', { class: 'round-date' }, formatDay(r.date)),
       h('span', { class: 'round-course' },
         h('span', { class: 'row-title' }, r.course || 'Round'),
-        meta.length ? h('span', { class: 'row-meta' }, meta.join(' · ')) : null),
+        meta.length ? h('span', { class: 'row-meta' }, meta.join(' · ')) : null,
+        friends.length ? withPartners(ctx, friends) : null),
       h('span', { class: 'round-pts' }, r.points ? [String(r.points), h('small', null, ' pts')] : ''),
       h('span', { class: `score-cell ${good ? 'is-good' : ''}` },
         h('span', { class: 'score-value' }, String(r.score)),
