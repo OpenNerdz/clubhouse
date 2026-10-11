@@ -21,6 +21,11 @@ function accountGroup(ctx) {
   const s = ctx.settings;
   const lastBackup = ctx.state.meta.lastBackup;
   const backupStatus = () => {
+    if (ctx.backupRefused()) {
+      return ctx.provider.id === 'google'
+        ? 'Not allowed yet. Press Back up now and tick the Google Drive box.'
+        : `Not allowed when you signed in. Disconnect, then connect again and allow ${ctx.provider.drive}.`;
+    }
     if (!ctx.unsaved) return lastBackup ? `Everything is backed up. Last backed up ${timeAgo(lastBackup)}.` : 'Not backed up yet.';
     if (ctx.backupError) return `Not backed up yet. ${ctx.backupError}`;
     return lastBackup ? `Last backed up ${timeAgo(lastBackup)}. Your latest changes aren’t backed up yet.` : 'Not backed up yet.';

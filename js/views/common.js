@@ -240,10 +240,14 @@ function board(name, value, note) {
 
 /** When his latest scores or partners haven't gone up to his backup, and need him to sign in for it. */
 export function backupNotice(ctx) {
-  if (!ctx.backupPending()) return null;
+  const refused = ctx.backupRefused();
+  if (!refused && !ctx.backupPending()) return null;
+  const drive = ctx.provider.drive;
   return h('div', { class: 'notice', role: 'status' },
-    h('span', null, icon('cloud', 18), `Your recent changes aren’t backed up to ${ctx.provider.drive} yet.`),
-    h('button', { class: 'btn btn-small', type: 'button', onclick: ctx.actions.backupNow, disabled: !!ctx.busy }, 'Back up now'));
+    h('span', null, icon('cloud', 18), refused
+      ? `${drive} backup isn’t allowed, so your golf isn’t backed up and anything from your other devices can’t come in.`
+      : `Your recent changes aren’t backed up to ${drive} yet.`),
+    h('button', { class: 'btn btn-small', type: 'button', onclick: ctx.actions.backupNow, disabled: !!ctx.busy }, refused ? `Allow ${drive}` : 'Back up now'));
 }
 
 export const shortCourse = (name = '') => name.replace(/\s+(?:Golf\s*(?:&|and)\s*Country\s+Club|Golf\s+Club|Golf\s+Course|Country\s+Club|G\.?C\.?)$/i, '');

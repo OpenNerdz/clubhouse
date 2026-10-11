@@ -461,6 +461,15 @@ function backupPending() {
   return unsavedChanges() && store.ownDataChangedSince(st, st.meta.lastBackup) && (!provider().canSaveQuietly() || !!app.backupError);
 }
 
+/**
+ * True while he's signed in but didn't allow the backup when signing in, so nothing
+ * goes up and his golf from other devices can't come in.
+ */
+function backupRefused() {
+  const p = provider();
+  return !app.demo && !!app.state.meta.profile && app.state.settings.driveBackup && p.hasToken() && !p.canBackup();
+}
+
 /* ---------- actions used by the screens ---------- */
 
 const stamp = (obj) => ({ ...obj, updatedAt: Date.now() });
@@ -822,6 +831,7 @@ const ctx = {
   get unsaved() { return unsavedChanges(); },
   get backupError() { return app.backupError; },
   backupPending,
+  backupRefused,
   actions,
   navigate,
   onCleanup: (fn) => app.cleanups.push(fn),
