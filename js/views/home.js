@@ -1,6 +1,6 @@
 import { h, icon, card, empty, greeting, formatLongDay, formatTime, today, timeAgo, daysUntil } from '../ui.js';
 import { scoreChart } from '../chart.js';
-import { mailRow, upcomingRow, nextUp, roundRow, resultRow, statStrip, connectCard, shortCourse } from './common.js';
+import { mailRow, upcomingRow, nextUp, roundRow, resultRow, statStrip, connectCard, shortCourse, backupNotice } from './common.js';
 import { roundSheet, teeTimeSheet } from './sheets.js';
 import { liveCard } from './play.js';
 
@@ -110,6 +110,7 @@ export function homeView(ctx) {
         h('h1', null, name ? `${greeting()}, ${name}` : greeting()),
         ctx.connected && !ctx.demo && meta.lastScan ? h('p', { class: 'page-sub' }, `Email checked ${timeAgo(meta.lastScan)}`) : null)),
     ctx.live ? liveCard(ctx, ctx.live) : played ? returnCard(ctx, played) : null,
+    backupNotice(ctx),
     !hasMail ? connectCard(ctx) : null,
     show.stats ? statStrip(ctx) : null,
     main.length || side.length

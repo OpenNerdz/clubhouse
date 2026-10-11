@@ -238,6 +238,14 @@ function board(name, value, note) {
     h('div', { class: 'board-note' }, note));
 }
 
+/** When his latest scores or partners haven't gone up to his backup, and need him to sign in for it. */
+export function backupNotice(ctx) {
+  if (!ctx.backupPending()) return null;
+  return h('div', { class: 'notice', role: 'status' },
+    h('span', null, icon('cloud', 18), `Your recent changes aren’t backed up to ${ctx.provider.drive} yet.`),
+    h('button', { class: 'btn btn-small', type: 'button', onclick: ctx.actions.backupNow, disabled: !!ctx.busy }, 'Back up now'));
+}
+
 export const shortCourse = (name = '') => name.replace(/\s+(?:Golf\s*(?:&|and)\s*Country\s+Club|Golf\s+Club|Golf\s+Course|Country\s+Club|G\.?C\.?)$/i, '');
 
 export function connectCard(ctx, { compact = false } = {}) {
@@ -261,6 +269,6 @@ export function signInButtons(ctx, verb = 'Continue') {
   return h('div', { class: 'signin-buttons' },
     button('google', googleLogo(18), 'Google'),
     button('microsoft', microsoftLogo(17), 'Microsoft'),
-    ctx.busy ? h('p', { class: 'setup-note', role: 'status' }, ctx.busy) : null,
+    ctx.busy ? h('p', { class: 'setup-note', role: 'status', 'data-busy-label': '' }, ctx.busy) : null,
     missing.length ? h('p', { class: 'setup-note' }, `${missing.join(' and ')} sign-in needs a one-time setup first. See SETUP.md.`) : null);
 }

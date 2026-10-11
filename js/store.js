@@ -53,8 +53,11 @@ export function emptyState() {
     friends: {},
     emails: {},
     // Local to this device; never synced. `live` is a round being scored hole by
-    // hole; `places` remembers where courses are, for the weather.
-    meta: { onboarded: false, demo: false, profile: null, lastScan: 0, lastBackup: 0, driveFileId: null, skipped: [], live: null, places: {} },
+    // hole; `places` remembers where courses are, for the weather. `owner` is the
+    // account this data belongs to, kept after disconnecting so another account
+    // can't take it over unasked. `changedAt` is when he last changed something
+    // that's backed up, so `changedAt > lastBackup` means the backup is behind.
+    meta: { onboarded: false, demo: false, profile: null, owner: null, lastScan: 0, lastBackup: 0, changedAt: 0, driveFileId: null, skipped: [], live: null, places: {} },
   };
 }
 
@@ -64,7 +67,7 @@ export function normalise(data) {
   const s = data && typeof data === 'object' ? data : {};
   const settings = { ...base.settings, ...(s.settings || {}) };
   for (const k of ['home', 'categories', 'roundFields']) settings[k] = { ...base.settings[k], ...((s.settings || {})[k] || {}) };
-  return {
+  const out = {
     version: SCHEMA_VERSION,
     settings,
     rounds: s.rounds || {},
@@ -74,9 +77,47 @@ export function normalise(data) {
     emails: s.emails || {},
     meta: { ...base.meta, ...(s.meta || {}) },
   };
+  // Data saved before these were kept: it belongs to whoever is connected, and
+  // anything changed since the last backup is still to go up.
+  if (!out.meta.owner && out.meta.profile && out.meta.profile.email) out.meta.owner = out.meta.profile.email;
+  if (s.meta && !('changedAt' in s.meta)) out.meta.changedAt = lastChange(out);
+  return out;
 }
 
 const COLLECTIONS = ['rounds', 'teeTimes', 'courses', 'friends', 'emails'];
+// What he enters himself, as opposed to what's read from his email.
+const OWN_DATA = ['rounds', 'teeTimes', 'courses', 'friends'];
+
+function lastChange(state) {
+  let latest = state.settings.updatedAt || 0;
+  for (const k of OWN_DATA) for (const x of Object.values(state[k])) latest = Math.max(latest, x.updatedAt || 0);
+  return latest;
+}
+
+/** True when there are scores, tee times, partners or courses he entered (not just email), or a round under way. */
+export function hasOwnData(state) {
+  return !!(state.meta && state.meta.live) || OWN_DATA.some((k) => Object.values(state[k] || {}).some((x) => !x.deleted));
+}
+
+/** True when scores, tee times, partners or courses changed after the last backup. */
+export function ownDataChangedSince(state, time) {
+  return OWN_DATA.some((k) => Object.values(state[k] || {}).some((x) => (x.updatedAt || 0) > time));
+}
+
+/**
+ * A clean start for a different account on this device: none of the previous
+ * person's golf, only how the screen looks. Their backup, if any, is untouched.
+ */
+export function freshStart(state) {
+  const base = emptyState();
+  const { theme, textSize, distance } = state.settings;
+  Object.assign(base.settings, { theme, textSize, distance });
+  base.meta.onboarded = true;
+  return base;
+}
+
+/** Whether two addresses are the same account. */
+export const sameAccount = (a, b) => !!a && !!b && a.trim().toLowerCase() === b.trim().toLowerCase();
 
 function mergeCollection(a = {}, b = {}) {
   const out = { ...a };
@@ -107,10 +148,11 @@ export function forBackup(state) {
   return { ...rest, savedAt: Date.now() };
 }
 
-// JSON with sorted keys, so the same data always gives the same text.
+// JSON with sorted keys, so the same data always gives the same text. Empty
+// (undefined) fields are left out, as they are in the saved backup.
 function stable(v) {
   if (Array.isArray(v)) return `[${v.map(stable).join(',')}]`;
-  if (v && typeof v === 'object') return `{${Object.keys(v).sort().map((k) => `${JSON.stringify(k)}:${stable(v[k])}`).join(',')}}`;
+  if (v && typeof v === 'object') return `{${Object.keys(v).filter((k) => v[k] !== undefined).sort().map((k) => `${JSON.stringify(k)}:${stable(v[k])}`).join(',')}}`;
   return JSON.stringify(v === undefined ? null : v);
 }
 

@@ -34,7 +34,7 @@ There is no server. Everything runs in the browser:
 
    Access tokens are kept in memory only.
 2. **Checking email:** the mailbox is searched for golf terms (plus any extra words he adds). Each match is read and passed through `js/parser.js`, which drops anything that isn't golf (a VW Golf, horse racing, crazy golf), picks a category and pulls out the details.
-3. **Storage:** only the extracted details and a short preview are saved, in the browser's IndexedDB. An optional backup goes to a private app folder in his Google Drive or OneDrive, which also keeps devices in step.
+3. **Storage:** only the extracted details and a short preview are saved, in the browser's IndexedDB. An optional backup goes to a private app folder in his Google Drive or OneDrive, which also keeps devices in step. While he's signed in, each change goes up a few seconds after he makes it. Google's sign-in only lasts an hour, so when there's something new that needs it again, Home and Scores offer **Back up now**. The data on a device belongs to the account that last connected, so a different account signing in there is asked before those scores go into its backup.
 4. **Weather:** the course is found by name on OpenStreetMap (Nominatim) and the forecast comes from Open-Meteo. Neither needs a key, and only the course name and position are sent.
 
 ## Files

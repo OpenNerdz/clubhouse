@@ -28,6 +28,7 @@ const app = {
   busy: null,
   cleanups: [],
   backupTimer: null,
+  backupError: null, // why the last backup failed, until one works
   session: 0,
 };
 
@@ -43,9 +44,10 @@ function persist() {
   });
 }
 
-/** Changes the data, saves it and redraws the screen. */
+/** Changes the data, saves it and redraws the screen. `backup: false` is for changes the backup doesn't need. */
 function mutate(fn, { backup = true } = {}) {
   fn(app.state);
+  if (backup) app.state.meta.changedAt = Date.now();
   persist();
   render();
   if (backup) scheduleBackup();
@@ -67,9 +69,10 @@ function visibleEmails() {
 /* ---------- busy indicator & errors ---------- */
 
 function setBusy(label) {
+  if (label === app.busy) return;
   app.busy = label;
   const labels = document.querySelectorAll('[data-busy-label]');
-  if ((label && !labels.length) || (!label && document.querySelector('.is-busy'))) render();
+  if (!label || !labels.length) render();
   else labels.forEach((el) => { el.textContent = label; });
 }
 
@@ -181,11 +184,12 @@ async function scan({ auto = false } = {}) {
  */
 async function autoCheck() {
   if (app.demo || app.busy || !app.state.meta.profile || document.visibilityState !== 'visible') return;
-  if (Date.now() - (app.state.meta.lastScan || 0) < 20 * 60000) return;
+  const scanDue = Date.now() - (app.state.meta.lastScan || 0) >= 20 * 60000;
+  if (!scanDue && !unsavedChanges()) return;
   const p = provider();
   if (!p.isConfigured() || !(await p.quietSignIn()) || app.busy) return;
   try {
-    await scan({ auto: true });
+    if (scanDue) await scan({ auto: true });
     await backup();
   } catch {
     // Nothing to show: he can always press Check email.
@@ -209,14 +213,60 @@ async function finishConnect(p) {
   setBusy('Connecting…');
   const profile = await p.getProfile();
   if (session !== app.session) return setBusy(null);
+  // Someone else's golf is on this device: don't put it in this account unasked.
+  const { owner } = app.state.meta;
+  if (owner && !store.sameAccount(owner, profile.email)) {
+    let choice = 'fresh'; // nothing of theirs but settings, so start clean
+    if (store.hasOwnData(app.state)) {
+      setBusy(null);
+      choice = await whoseScores(owner, profile.email);
+      if (session !== app.session) return;
+      if (!choice) {
+        p.clearToken();
+        return toast('Not connected. Nothing on this device has changed.');
+      }
+      setBusy('Connecting…');
+    }
+    if (choice === 'fresh') app.state = store.freshStart(app.state);
+  }
   mutate((st) => {
     st.meta.profile = profile;
+    st.meta.owner = profile.email;
     st.meta.onboarded = true;
   }, { backup: false });
   navigate('home');
   await backup(); // a backup from another device comes in first, so emails aren't read twice
   await scan();
   await backup();
+}
+
+/** Asks whether the scores already on this device are his. Resolves 'fresh', 'keep', or null to cancel. */
+function whoseScores(owner, email) {
+  const behind = app.state.meta.changedAt > app.state.meta.lastBackup;
+  return new Promise((resolve) => {
+    let choice = null;
+    openDialog({
+      title: 'Whose scores are these?',
+      className: 'sheet-small',
+      onClose: () => resolve(choice),
+      build: (close) => {
+        const pick = (c) => () => { choice = c; close(); };
+        return {
+          body: [
+            h('p', { class: 'dialog-text' }, `This device has golf saved by ${owner}. You’ve signed in as ${email}.`),
+            h('p', { class: 'dialog-text' }, behind
+              ? ['Starting fresh takes it off this device, and some of it isn’t backed up yet. ',
+                h('button', { class: 'link-btn', type: 'button', onclick: actions.exportData }, 'Save a backup file'), ' first to keep a copy.']
+              : 'Starting fresh takes it off this device. It stays in their backup.'),
+          ],
+          footer: [
+            h('button', { class: 'btn', type: 'button', onclick: pick('keep') }, 'It’s mine, keep it'),
+            h('button', { class: 'btn btn-primary', type: 'button', onclick: pick('fresh') }, 'Start fresh'),
+          ],
+        };
+      },
+    });
+  });
 }
 
 /** Google's sign-in has two screens that catch people out, so say what's coming first. */
@@ -281,19 +331,30 @@ function removeAccessDialog(p) {
 
 async function disconnect() {
   const p = provider();
+  const stranded = unsavedChanges() && !p.canSaveQuietly();
   const ok = await confirmDialog({
     title: `Disconnect ${p.info.name}?`,
-    message: 'Clubhouse will stop reading your email and the golf emails it found will be removed from this device. Your scores and tee times stay.',
+    message: `Clubhouse will stop reading your email and the golf emails it found will be removed from this device. Your scores and tee times stay${
+      stranded ? `, but your latest changes aren’t backed up to ${p.info.drive}. To back them up first, choose Cancel, then Back up now.` : '.'}`,
     confirmLabel: 'Disconnect',
     danger: true,
   });
   if (!ok) return;
+  // Last changes go up to his backup while he's still signed in.
+  if (unsavedChanges() && p.canSaveQuietly()) {
+    setBusy('Backing up…');
+    await quietBackup();
+    setBusy(null);
+  }
   app.session += 1;
   clearTimeout(app.backupTimer);
+  app.backupError = null;
   const revoked = await p.signOut();
+  // `owner`, `lastBackup` and `changedAt` stay, so a different account signing in
+  // here later is asked before it takes these scores, and told if they're backed up.
   mutate((st) => {
     st.emails = {};
-    Object.assign(st.meta, { profile: null, skipped: [], lastScan: 0, driveFileId: null, lastBackup: 0 });
+    Object.assign(st.meta, { profile: null, skipped: [], lastScan: 0, driveFileId: null });
   }, { backup: false });
   if (revoked) toast(`Disconnected. Clubhouse no longer has access to your ${p.info.name} account.`);
   else removeAccessDialog(p);
@@ -313,13 +374,19 @@ async function runBackup({ interactive = false } = {}) {
   const p = provider();
   if (app.demo || !app.state.settings.driveBackup || !app.state.meta.profile || !p.hasToken()) return;
   if (!p.canBackup()) {
-    if (interactive) toast(`${p.info.drive} backup wasn’t allowed when you signed in. Disconnect, then connect again and allow it.`, { tone: 'error' });
+    if (interactive) {
+      toast(p.info.id === 'google'
+        ? 'Google Drive backup wasn’t allowed. Press Back up now again and tick the Google Drive box.'
+        : `${p.info.drive} backup wasn’t allowed when you signed in. Disconnect, then connect again and allow it.`, { tone: 'error' });
+    }
     return;
   }
   const session = app.session;
+  let at = 0; // when the copy was taken; anything changed after it is still to go up
   const done = (id) => {
     app.state.meta.driveFileId = id;
-    app.state.meta.lastBackup = Date.now();
+    app.state.meta.lastBackup = at;
+    app.backupError = null;
     persist();
     render();
     if (interactive) toast(`Backed up to ${p.info.drive}.`);
@@ -327,6 +394,7 @@ async function runBackup({ interactive = false } = {}) {
   try {
     const { id, data: remote } = await p.loadBackup(app.state.meta.driveFileId);
     if (stale(session)) return;
+    at = Date.now();
     if (remote) {
       const merged = store.merge(app.state, remote);
       if (!store.sameData(merged, app.state)) {
@@ -340,26 +408,57 @@ async function runBackup({ interactive = false } = {}) {
     if (stale(session)) return;
     done(newId);
   } catch (err) {
+    if (stale(session)) return;
+    app.backupError = err.message;
     if (interactive) toast(err.message, { tone: 'error' });
+    else render(); // shows that it isn't backed up
   }
 }
 
-function scheduleBackup() {
+/** True when he's changed something since the last backup (and backs up). */
+function unsavedChanges() {
+  const st = app.state;
+  return !app.demo && !!st.meta.profile && st.settings.driveBackup && st.meta.changedAt > st.meta.lastBackup;
+}
+
+/** Backs up a few seconds after a change, once the changes have settled. */
+function scheduleBackup(delay = 4000) {
   clearTimeout(app.backupTimer);
-  if (!provider().hasToken()) return;
-  app.backupTimer = setTimeout(() => backup(), 4000);
+  app.backupTimer = null;
+  if (!unsavedChanges()) return;
+  app.backupTimer = setTimeout(() => {
+    app.backupTimer = null;
+    quietBackup();
+  }, delay);
+}
+
+/** Leaving the app: a backup that's waiting goes now, as the phone may close the app. */
+function flushBackup() {
+  if (document.visibilityState !== 'hidden' || !app.backupTimer) return;
+  clearTimeout(app.backupTimer);
+  app.backupTimer = null;
+  quietBackup();
+}
+
+/** Backs up if that needs no sign-in window. When it does, the notice asks him to. */
+async function quietBackup() {
+  const p = provider();
+  if (!unsavedChanges() || !p.isConfigured()) return;
+  const could = p.canSaveQuietly();
+  if (!(await p.quietSignIn())) {
+    if (could) render(); // Microsoft turned down the renewal, so it's over to him now
+    return;
+  }
+  await backup();
 }
 
 /**
- * True when scores or tee times changed more than a day ago and still aren't
- * backed up. Newer changes go up by themselves the next time email is checked.
+ * True when his scores, tee times, partners or courses aren't backed up and won't
+ * go up by themselves: Google needs its window, or the last try failed.
  */
 function backupPending() {
   const st = app.state;
-  if (app.demo || !st.meta.profile || !st.settings.driveBackup) return false;
-  const last = st.meta.lastBackup || 0;
-  const dayAgo = Date.now() - DAY;
-  return ['rounds', 'teeTimes'].some((k) => Object.values(st[k]).some((x) => (x.updatedAt || 0) > last && x.updatedAt < dayAgo));
+  return unsavedChanges() && store.ownDataChangedSince(st, st.meta.lastBackup) && (!provider().canSaveQuietly() || !!app.backupError);
 }
 
 /* ---------- actions used by the screens ---------- */
@@ -372,8 +471,15 @@ const actions = {
   connect,
   disconnect,
   async backupNow() {
+    const p = provider();
     try {
-      await ensureSignedIn('backup');
+      if (p.hasToken() && !p.canBackup() && p.info.id === 'google') {
+        // He left the Google Drive box unticked: show Google's boxes again.
+        await p.signIn({ hint: app.state.meta.profile && app.state.meta.profile.email, consent: true });
+        await checkAccount(p);
+      } else {
+        await ensureSignedIn('backup');
+      }
       await backup({ interactive: true });
     } catch (err) {
       report(err);
@@ -578,6 +684,7 @@ const actions = {
       if (!data || typeof data !== 'object' || !('rounds' in data || 'settings' in data)) throw new Error();
       const before = live(app.state.rounds).length;
       app.state = store.merge(app.state, data);
+      app.state.meta.changedAt = Date.now();
       persist();
       render();
       scheduleBackup();
@@ -598,6 +705,7 @@ const actions = {
     if (!ok) return;
     app.session += 1;
     clearTimeout(app.backupTimer);
+    app.backupError = null;
     const wasConnected = !!app.state.meta.profile;
     const p = provider();
     const revoked = await p.signOut();
@@ -711,6 +819,8 @@ const ctx = {
     return p ? (p.lat !== undefined ? p : false) : null;
   },
   get live() { return app.state.meta.live; },
+  get unsaved() { return unsavedChanges(); },
+  get backupError() { return app.backupError; },
   backupPending,
   actions,
   navigate,
@@ -809,6 +919,8 @@ async function start() {
   await resuming;
   autoCheck();
   document.addEventListener('visibilitychange', autoCheck);
+  document.addEventListener('visibilitychange', flushBackup);
+  window.addEventListener('online', () => scheduleBackup(1000));
   store.requestPersistence();
   if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
     navigator.serviceWorker.register('sw.js').catch(() => {});

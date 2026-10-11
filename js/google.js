@@ -33,6 +33,8 @@ export const hasToken = () => !!token && Date.now() < expiresAt - 60000;
 export const canBackup = () => granted.has(SCOPES.drive);
 /** Google can only sign in through its window, so this just says whether a token is still in hand. */
 export const quietSignIn = async () => hasToken();
+/** Whether a backup can go up now without opening a sign-in window. */
+export const canSaveQuietly = () => hasToken() && canBackup();
 
 function loadGis() {
   if (window.google && window.google.accounts && window.google.accounts.oauth2) return Promise.resolve();
@@ -94,9 +96,12 @@ export async function prepare() {
   } catch { /* retried on click */ }
 }
 
-/** Call directly from a click handler, otherwise browsers may block the pop-up. */
-export async function signIn({ hint } = {}) {
-  if (hasToken()) return token;
+/**
+ * Call directly from a click handler, otherwise browsers may block the pop-up.
+ * `consent` shows Google's permission boxes again, e.g. for a Drive box left unticked.
+ */
+export async function signIn({ hint, consent = false } = {}) {
+  if (hasToken() && !consent) return token;
   if (!isConfigured()) throw new AuthError('Google sign-in isn’t set up yet. Follow SETUP.md to add your Client ID.');
   if (!client) {
     await loadGis();
@@ -105,7 +110,7 @@ export async function signIn({ hint } = {}) {
   return new Promise((resolve, reject) => {
     if (pending) pending.reject(new AuthError('Sign-in restarted.', { silent: true }));
     pending = { resolve, reject };
-    client.requestAccessToken({ prompt: '', login_hint: hint || undefined });
+    client.requestAccessToken({ prompt: consent ? 'consent' : '', login_hint: hint || undefined });
   });
 }
 

@@ -1,6 +1,6 @@
 // Lets Clubhouse open without a signal (handy for entering a score on the course).
 // Always tries the network first so updates show up straight away.
-const CACHE = 'clubhouse-v5';
+const CACHE = 'clubhouse-v6';
 const SHELL = [
   './', 'index.html', 'privacy.html', 'css/styles.css', 'manifest.webmanifest', 'icons/icon.svg', 'icons/contours.svg',
   'fonts/besley.woff2', 'fonts/besley-italic.woff2', 'fonts/libre-franklin.woff2',

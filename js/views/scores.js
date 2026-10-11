@@ -1,7 +1,7 @@
 import { h, icon, card, penCircle } from '../ui.js';
 import { scoreChart, trendChart } from '../chart.js';
 import { latestHandicapEmail, officialIndexHistory, estimatedIndexHistory, formatIndex } from '../golf.js';
-import { roundRow, statStrip } from './common.js';
+import { roundRow, statStrip, backupNotice } from './common.js';
 import { roundSheet } from './sheets.js';
 import { partnersCard } from './partners.js';
 
@@ -56,9 +56,7 @@ export function scoresView(ctx) {
     h('div', { class: 'page-head' },
       h('div', null, h('h1', null, 'Scores'), h('p', { class: 'page-sub' }, sub)),
       rounds.length ? addRound() : null),
-    ctx.backupPending() ? h('div', { class: 'notice', role: 'status' },
-      h('span', null, icon('cloud', 18), `Your recent changes aren’t backed up to ${ctx.provider.drive} yet.`),
-      h('button', { class: 'btn btn-small', type: 'button', onclick: ctx.actions.backupNow }, 'Back up now')) : null,
+    backupNotice(ctx),
     rounds.length ? statStrip(ctx) : null,
     full.length >= 2
       ? card({ title: 'Score trend', className: 'card-chart' },

@@ -46,6 +46,9 @@ const session = {
   remove: (k) => { try { sessionStorage.removeItem(k); } catch { /* ignore */ } },
 };
 
+/** Whether a backup can go up now without going to Microsoft's sign-in page. */
+export const canSaveQuietly = () => (hasToken() ? canBackup() : !!session.get(RENEW_KEY));
+
 function b64url(bytes) {
   let s = '';
   for (const b of bytes) s += String.fromCharCode(b);
@@ -88,8 +91,9 @@ async function renew() {
   try {
     await tokenRequest({ grant_type: 'refresh_token', refresh_token: rt });
     return true;
-  } catch {
-    session.remove(RENEW_KEY);
+  } catch (err) {
+    // Only forget it when Microsoft turns it down, not when there's no signal.
+    if (err instanceof AuthError) session.remove(RENEW_KEY);
     return false;
   }
 }

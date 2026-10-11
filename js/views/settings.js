@@ -20,6 +20,11 @@ function accountGroup(ctx) {
   const p = ctx.state.meta.profile;
   const s = ctx.settings;
   const lastBackup = ctx.state.meta.lastBackup;
+  const backupStatus = () => {
+    if (!ctx.unsaved) return lastBackup ? `Everything is backed up. Last backed up ${timeAgo(lastBackup)}.` : 'Not backed up yet.';
+    if (ctx.backupError) return `Not backed up yet. ${ctx.backupError}`;
+    return lastBackup ? `Last backed up ${timeAgo(lastBackup)}. Your latest changes aren’t backed up yet.` : 'Not backed up yet.';
+  };
   return group(`${ctx.provider.mail} account`, null,
     h('div', { class: 'account' },
       p.picture ? h('img', { class: 'avatar', src: p.picture, alt: '', width: 44, height: 44, referrerpolicy: 'no-referrer' }) : h('span', { class: 'avatar avatar-blank' }, icon('mail', 20)),
@@ -30,13 +35,11 @@ function accountGroup(ctx) {
     switchRow({
       id: 'set-drive',
       label: `Back up to ${ctx.provider.drive}`,
-      hint: s.driveBackup
-        ? (lastBackup ? `Last backed up ${timeAgo(lastBackup)}.` : 'Not backed up yet.')
-        : 'Keeps your scores safe and the same on all your devices.',
+      hint: s.driveBackup ? backupStatus() : 'Keeps your scores safe and the same on all your devices.',
       checked: s.driveBackup,
       onChange: (v) => ctx.actions.setSetting('driveBackup', v),
     }),
-    s.driveBackup ? block(h('button', { class: 'btn btn-small', type: 'button', onclick: ctx.actions.backupNow }, icon('cloud', 16), h('span', null, 'Back up now'))) : null);
+    s.driveBackup ? block(h('button', { class: 'btn btn-small', type: 'button', onclick: ctx.actions.backupNow, disabled: !!ctx.busy }, icon('cloud', 16), h('span', null, 'Back up now'))) : null);
 }
 
 function mailGroup(ctx) {

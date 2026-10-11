@@ -174,6 +174,8 @@ Then:
 - **Scores**: add a round with **Add score**. Only course, score and date are needed, and the date starts as today. The courses he plays most appear as buttons under the course box, and a course he's played before fills in its par, rating and slope. If he enters the course rating and slope from the scorecard, Clubhouse estimates his handicap using the World Handicap System method.
 - **Playing partners**: add the people he plays with (Scores → **Add partner**, or **New** on the score form). Each gets a ball marker with their initials, a golf emblem or a photo. Tick them on a score or tee time, and tap a partner to see how he plays with them: rounds together, his average and his best.
 - **Deleting** a round or tee time, or hiding an email, happens straight away with an **Undo** button at the bottom of the screen.
+- **Backup:** while he's signed in, scores, tee times, partners and settings are backed up to his Google Drive or OneDrive a few seconds after each change. Google's sign-in lasts an hour, so later changes wait until he presses **Check email**, or until he taps **Back up now** on the note that appears on Home and Scores. **Settings** says when it was last backed up. If he left the Google Drive box unticked when signing in, **Back up now** shows Google's boxes again.
+- **Sharing a device:** if someone else signs in on a phone or computer that already has his scores, Clubhouse asks whose they are. **Start fresh** gives the new person an empty Clubhouse (his scores stay in his own backup); **It's mine, keep it** puts them in the new account.
 - On Android, the **back button** closes whatever is open on top, rather than leaving the screen.
 - **Settings** controls what appears where:
   - which sections are on the home screen
